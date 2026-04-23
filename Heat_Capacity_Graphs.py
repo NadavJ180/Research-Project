@@ -1,75 +1,66 @@
-import numpy as np  
-import matplotlib.pyplot as plt 
+import numpy as np
+import matplotlib.pyplot as plt
 
-# Constants
-kB = 1  # Boltzmann's constant (dimensionless)
+# Constants (normalized so kB = 1 for simplicity)
+kB = 1.0
 
-# Temperature range
-T = np.linspace(0.02, 5, 300)  # Kelvin
-
-# --- HO Heat Capacity ---
+# --- Harmonic Oscillator Heat Capacity ---
 
 def Cv_HO(T, hw=1.0):
     x = hw / (kB * T)
     return kB * (x**2 * np.exp(x)) / (np.exp(x) - 1)**2
 
-# --- Box Heat Capacity ---
+# --- Box Potential Heat Capacity ---
 
-def Cv_box(T, N):
-    Cv = []
+def Cv_Box_Quantum(temp_ratio, n_levels):
+    # temp_ratio = kB * T / Eg
+    # En = n^2 * Eg
+    Cv_list = []
+    for T in temp_ratio:
+        n = np.arange(1, n_levels + 1)
+        E_n = n**2
+        beta = 1.0 / T
+        
+        # Partition function and its derivatives
+        exp = np.exp(-beta * E_n)
+        z = np.sum(exp)
+        E_ave = np.sum(E_n * exp) / z
+        E2_ave = np.sum(E_n**2 * exp) / z
+        
+        # Cv = ( <E^2> - <E>^2 ) / (kB * T^2)
+        Cv = (E2_ave - E_ave**2) * beta**2 * kB
+        Cv_list.append(Cv)
+    return np.array(Cv_list)
 
-    n = np.arange(1, N+1) # number of energy levels
-    En = n**2 # energy levels (constants are set to 1)
+#Number of Box Potential Energy Levels
+n_levels = [2,10,20,100]
 
-    En = En - En[0]  # shift energies so that the ground state is at zero
+# Temperature range (log scale)
+T_range = np.logspace(-2, 2, 400)
 
-    Cv = np.zeros_like(T)
-    
-    for i, temp in enumerate(T):
+# Create the plots
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
 
-        weights = np.exp(-En / (kB * temp))
+# --- Left Plot: Harmonic Potential ---
+ax1.plot(T_range, [kB]*len(T_range), '--', color='yellowgreen', label='Classical')
+ax1.plot(T_range, Cv_HO(T_range), '-', color='steelblue', label='Quantum')
+ax1.set_title("Harmonic potential")
+ax1.set_xlabel(r"$k_B T / E_g$")
+ax1.set_ylabel(r"$C_v [J/K]$")
+ax1.set_xscale('log')
+ax1.set_ylim(0, 1.2)
+ax1.legend()
 
-        Z = np.sum(weights)  # partition function
-        E_ave = np.sum(En * weights) / Z  
-        E_2_ave = np.sum(En**2 * weights) / Z  
-    
-        Cv[i] = (E_2_ave - E_ave**2) / (kB * temp**2)
+# --- Right Plot: Box Potential ---
+ax2.plot(T_range, [0.5*kB]*len(T_range), '--', color='yellowgreen', label='Classical')
+for n in n_levels:
+    ax2.plot(T_range, Cv_Box_Quantum(T_range, n), '-', label=f'Quantum (n={n})')
+ax2.set_title("Box potential")
+ax2.set_xlabel(r"$k_B T / E_g$")
+ax2.set_ylabel(r"$C_v [J/K]$")
+ax2.set_xscale('log')
+ax2.set_ylim(0, 0.7)
+ax2.legend()
 
-    return Cv
-
-# --- num of Box levels ---
-N_vals = [2, 3, 5, 10, 20, 50, 200]
-
-# --- Compute heat capacities ---
-plt.figure
-
-for N in N_vals:
-    Cv_vals = Cv_box(T, N)
-    plt.plot(T, Cv_vals, label=f'N={N}')
-
-plt.xlabel('Temperature (dimensionless)')
-plt.ylabel('Heat Capacity (dimensionless)')
-plt.title('Effect of Number of Energy Levels on Heat Capacity (Box Potential)')
-plt.legend()
-plt.grid()
-
+plt.tight_layout()
 plt.show()
-
-'''
-Cv_HO_val = Cv_HO(T)
-Cv_box_val = Cv_box(T)
-
-# ---Plot ---
-plt.figure()
-plt.plot(T, Cv_HO_val, label='Harmonic Oscillator', color='blue')
-plt.plot(T, Cv_box_val, label='Particle in a Box', color='orange')
-
-plt.xlabel('Temperature (K)')
-plt.ylabel('Heat Capacity (C_v)')
-plt.title('Heat Capacity vs Temperature')
-
-plt.legend()
-plt.grid()
-
-plt.show()
-'''
