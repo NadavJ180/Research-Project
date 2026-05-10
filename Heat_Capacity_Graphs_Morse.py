@@ -15,6 +15,7 @@ def Cv_Morse(T_range, x_e, h_bar=1, w_e=1, kB=1): #bottom temp limit is set at 1
     Cv_list = []
 
     for T in T_range:
+        
         if T <= 1e-5:  # Avoid numerical issues at very low temperatures
             Cv_list.append(0)
             continue
@@ -67,8 +68,8 @@ def plot_Cv_Morse_Xe_list(T_range: np.ndarray, x_e_list: np.ndarray):
 
 #------ data for plotting Cv vs T for different x_e values ------
 T_range = np.logspace(-1, 2, 400)  # Temperature range
-x_e_list = np.array([0.000001, 0.0001, 0.001, 0.01, 0.05])  # Example anharmonic constant, can be varied for different plots
+x_e_list = np.array([0.000001, 0.0001, 0.001, 0.01, 0.05])
 x_e = 0.05
 
-plot_Cv_Morse(T_range, x_e)  # Run plot function for each x_e value
+#plot_Cv_Morse(T_range, x_e)  # Run plot function for each x_e value
 plot_Cv_Morse_Xe_list(T_range, x_e_list)  # Run plot function for a list of x_e values
