@@ -8,9 +8,16 @@ L = 1.0
 h_bar = 0.1
 E_g = (h_bar**2 * np.pi**2) / (2 * m * L**2)  # Ground state energy for box potential
 
+#Number of Box Potential Energy Levels
+n_levels = [2,10,20,100]
+n = 25000
+
+# Temperature range (log scale)
+T_range = np.logspace(-2, 2, 400)
+
 # --- Harmonic Oscillator Heat Capacity ---
 
-def Cv_HO(T, hw=1.0):
+def Cv_HO_Quantum(T, hw=1.0):
     x = hw / (kB * T)
     return kB * (x**2 * np.exp(x)) / (np.exp(x) - 1)**2
 
@@ -70,49 +77,39 @@ def find_classical_limit_Box(temp_ratio, n_levels, tolerance=1e-4):
     while not converged:
         xi_next = xi * 2
         next_Cv = Cv_Box_Classical(temp_ratio, n_levels, xi_next)
-        # Check for convergence
         
-        rmse = np.sqrt(np.mean((next_Cv - current_Cv)**2))
+        # Check for convergence using RMSE
 
+        rmse = np.sqrt(np.mean((next_Cv - current_Cv)**2))
+        '''
         if rmse < tolerance:
             converged = True
         else:
             xi = xi_next
             current_Cv = next_Cv
+        '''
+        # Check for convergance using max difference
+
+        max_diff = np.max(np.abs(next_Cv - current_Cv))
+
+        if max_diff < tolerance:
+            converged = True
+        else:
+            xi = xi_next
+            current_Cv = next_Cv
         
-        
-        if xi > 1e2:  # limit xi because of finite n_levels
+        if xi > 100:  # limit xi because of finite n_levels
             break   
 
     return current_Cv, xi
 
-#Number of Box Potential Energy Levels
-n_levels = [2,10,20,100]
-n = 25000
 
-# Temperature range (log scale)
-T_range = np.logspace(-2, 2, 400)
-
-# Create Classical limit plot for the box potential
-fig = plt.figure(figsize=(6, 5))
-classical_limit_box, xi_converged = find_classical_limit_Box(T_range, n)
-plt.plot(T_range, classical_limit_box, '--', color='yellowgreen', label=f'Classical Limit (xi={xi_converged:.2f})')
-plt.title("Classical Limit for Box Potential")
-plt.xlabel(r"$k_B T / E_g$")
-plt.ylabel(r"$C_v [J/K]$")
-plt.xscale('log')
-plt.ylim(0, 0.7)
-plt.legend()
-plt.tight_layout()
-plt.show()
-
-'''
 # Create the plots
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
 
 # --- Left Plot: Harmonic Potential ---
 ax1.plot(T_range, [kB]*len(T_range), '--', color='yellowgreen', label='Classical')
-ax1.plot(T_range, Cv_HO(T_range), '-', color='steelblue', label='Quantum')
+ax1.plot(T_range, Cv_HO_Quantum(T_range), '-', color='steelblue', label='Quantum')
 ax1.set_title("Harmonic potential")
 ax1.set_xlabel(r"$k_B T / E_g$")
 ax1.set_ylabel(r"$C_v [J/K]$")
@@ -121,6 +118,23 @@ ax1.set_ylim(0, 1.2)
 ax1.legend()
 
 # --- Right Plot: Box Potential ---
+classical_limit_box, xi_converged = find_classical_limit_Box(T_range, n)
+ax2.plot(T_range, classical_limit_box, '--', 
+         color='yellowgreen', label=f'Classical Limit (xi={xi_converged:.2f})')
+ax2.plot(T_range, Cv_Box_Quantum(T_range, n), '-', label=f'Quantum (n={n})')
+ax2.set_title("Box potential")
+ax2.set_xlabel(r"$k_B T / E_g$")
+ax2.set_ylabel(r"$C_v [J/K]$")
+ax2.set_xscale('log')
+ax2.set_ylim(0, 0.7)
+ax2.legend()
+
+plt.tight_layout()
+plt.show()
+
+
+# For multiple n_levels in the box potential plot
+'''
 ax2.plot(T_range, [0.5*kB]*len(T_range), '--', color='yellowgreen', label='Classical')
 for n in n_levels:
     ax2.plot(T_range, Cv_Box_Quantum(T_range, n), '-', label=f'Quantum (n={n})')
@@ -130,7 +144,19 @@ ax2.set_ylabel(r"$C_v [J/K]$")
 ax2.set_xscale('log')
 ax2.set_ylim(0, 0.7)
 ax2.legend()
+'''
 
+# Create Classical limit plot for the box potential
+'''
+fig = plt.figure(figsize=(6, 5))
+classical_limit_box, xi_converged = find_classical_limit_Box(T_range, n)
+plt.plot(T_range, classical_limit_box, '--', color='yellowgreen', label=f'Classical Limit (xi={xi_converged:.2f})')
+plt.title("Classical Limit for Box Potential")
+plt.xlabel(r"$k_B T / E_g$")
+plt.ylabel(r"$C_v [J/K]$")
+plt.xscale('log')
+plt.ylim(0, 0.7)
+plt.legend()
 plt.tight_layout()
 plt.show()
 '''
