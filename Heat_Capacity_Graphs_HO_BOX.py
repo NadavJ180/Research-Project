@@ -9,11 +9,12 @@ h_bar = 0.1
 E_g = (h_bar**2 * np.pi**2) / (2 * m * L**2)  # Ground state energy for box potential
 
 #Number of Box Potential Energy Levels
-n_levels = [2,10,20,100]
-n = 25000
+xi_initial = 2
+n_levels = [100, 500]
+n = 10
 
 # Temperature range (log scale)
-T_range = np.logspace(-2, 2, 400)
+T_span = np.logspace(-2, 2, 400)
 
 # --- Harmonic Oscillator Heat Capacity ---
 
@@ -43,73 +44,100 @@ def Cv_Box_Quantum(temp_ratio, n_levels):
         Cv_list.append(Cv)
     return np.array(Cv_list)
 
-def Cv_Box_Classical(temp_ratio, n_levels, xi):
+def Cv_Box_Classical(T, n, xi): # retuns Cv with a scaling factor for a specific T, n, and xi
     # temp_ratio = kB * T / Eg
     # En = n^2 * Eg
-    Cv_list = []
-    for T in temp_ratio:
-        n = np.arange(1, n_levels + 1)
-        E_n = n**2 * E_g / xi**2
-        beta = 1.0 / (T * kB)
-        
-        #Log-sum-exp trick for numerical stability (stop 1/0 overflow)
-        max_exponent = np.max(-beta * E_n)    
-        exp_shift = np.exp(-beta * E_n - max_exponent)
-        
-        # Partition function and its derivatives
-        z = np.sum(exp_shift)
-        E_ave = np.sum(E_n * exp_shift) / z
-        E2_ave = np.sum(E_n**2 * exp_shift) / z
-        
-        # Cv = ( <E^2> - <E>^2 ) / (kB * T^2)
-        Cv = (E2_ave - E_ave**2) * beta**2 * kB
-
-        Cv_list.append(Cv)
-    return np.array(Cv_list)
-
-def find_classical_limit_Box(temp_ratio, n_levels, tolerance=1e-4):
     
-    xi = 1.0
-    converged = False
-
-    current_Cv = Cv_Box_Classical(temp_ratio, n_levels, xi)
-
-    while not converged:
-        xi_next = xi * 2
-        next_Cv = Cv_Box_Classical(temp_ratio, n_levels, xi_next)
+    E_n = n**2 * E_g / xi**2
+    beta = 1.0 / (T * kB)
         
-        # Check for convergence using RMSE
+    exp = np.exp(-beta * E_n )
+    
+    # Partition function and its derivatives
+    z = np.sum(exp)
+    E_ave = np.sum(E_n * exp) / z
+    E2_ave = np.sum(E_n**2 * exp) / z
+    
+    # Cv = ( <E^2> - <E>^2 ) / (kB * T^2)
+    Cv = (E2_ave - E_ave**2) * beta**2 * kB
 
-        rmse = np.sqrt(np.mean((next_Cv - current_Cv)**2))
-        '''
+    return Cv
+
+def check_n_convergance(T, n, xi, tolerance=1e-4, iterations=1000):
+    converged = False
+    counter = 0
+
+    n_curr = n
+    Cv_curr = Cv_Box_Classical(T, n_curr, xi)
+    
+    while not converged and counter < iterations:
+        n_next = n_curr * 2
+        Cv_next = Cv_Box_Classical(T, n_next, xi)
+        
+        rmse = np.sqrt(np.mean((Cv_next - Cv_curr)**2))
+        
         if rmse < tolerance:
             converged = True
         else:
-            xi = xi_next
-            current_Cv = next_Cv
-        '''
-        # Check for convergance using max difference
+            n_curr = n_next
+            Cv_curr = Cv_next
+        
+        counter += 1
+    if not converged:
+        raise ValueError(f"Warning: tolerance ({tolerance}) is too small. N did not converge.")
+    elif counter >= iterations:
+        raise ValueError(f"Warning: n did not converge within the maximum number of iterations ({iterations}).")
+    else:
+        return n_curr
+    
+def check_xi_convergence(T, n, xi, tolerance=1e-4, iterations=1000):
+    converged = False
+    counter = 0
 
-        max_diff = np.max(np.abs(next_Cv - current_Cv))
-
-        if max_diff < tolerance:
+    xi_curr = xi
+    Cv_curr = Cv_Box_Classical(T, n, xi_curr)
+    
+    while not converged and counter < iterations:
+        xi_next = xi_curr * 2
+        Cv_next = Cv_Box_Classical(T, n, xi_next)
+        
+        rmse = np.sqrt(np.mean((Cv_next - Cv_curr)**2))
+        
+        if rmse < tolerance:
             converged = True
         else:
-            xi = xi_next
-            current_Cv = next_Cv
+            xi_curr = xi_next
+            Cv_curr = Cv_next
         
-        if xi > 100:  # limit xi because of finite n_levels
-            break   
+        counter += 1
+    if not converged:
+        raise ValueError(f"Warning: tolerance ({tolerance}) is too small. Xi did not converge to classical limit.")
+    elif counter >= iterations:
+        raise ValueError(f"Warning: xi did not converge within the maximum number of iterations ({iterations}).")
+    else:
+        return xi_curr
 
-    return current_Cv, xi
+def find_classical_limit_Box(T_span, n_initial, xi_initial, tolerance=1e-4):
+    Cv_classical = []
 
+    for T in T_span:
+        n = check_n_convergance(T, n_initial, xi_initial)
+        xi = check_xi_convergence(T, n, xi_initial)
+        classical_limit = Cv_Box_Classical(T, n, xi)
+        Cv_classical.append(classical_limit)
+    return np.array(Cv_classical)
+
+
+    
+        
+        
 
 # Create the plots
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
 
 # --- Left Plot: Harmonic Potential ---
-ax1.plot(T_range, [kB]*len(T_range), '--', color='yellowgreen', label='Classical')
-ax1.plot(T_range, Cv_HO_Quantum(T_range), '-', color='steelblue', label='Quantum')
+ax1.plot(T_span, [kB]*len(T_span), '--', color='yellowgreen', label='Classical')
+ax1.plot(T_span, Cv_HO_Quantum(T_span), '-', color='steelblue', label='Quantum')
 ax1.set_title("Harmonic potential")
 ax1.set_xlabel(r"$k_B T / E_g$")
 ax1.set_ylabel(r"$C_v [J/K]$")
@@ -118,10 +146,11 @@ ax1.set_ylim(0, 1.2)
 ax1.legend()
 
 # --- Right Plot: Box Potential ---
-classical_limit_box, xi_converged = find_classical_limit_Box(T_range, n)
-ax2.plot(T_range, classical_limit_box, '--', 
-         color='yellowgreen', label=f'Classical Limit (xi={xi_converged:.2f})')
-ax2.plot(T_range, Cv_Box_Quantum(T_range, n), '-', label=f'Quantum (n={n})')
+classical_limit_box = find_classical_limit_Box(T_span, n, xi_initial)
+print(f"Classical limit for box potential converged at xi = {check_xi_convergence(T_span[0], n, xi_initial)}")
+ax2.plot(T_span, classical_limit_box, '--', 
+        color='yellowgreen', label=f'Classical Limit')
+ax2.plot(T_span, Cv_Box_Quantum(T_span, n), '-', label=f'Quantum (n={n})')
 ax2.set_title("Box potential")
 ax2.set_xlabel(r"$k_B T / E_g$")
 ax2.set_ylabel(r"$C_v [J/K]$")
@@ -135,9 +164,9 @@ plt.show()
 
 # For multiple n_levels in the box potential plot
 '''
-ax2.plot(T_range, [0.5*kB]*len(T_range), '--', color='yellowgreen', label='Classical')
+ax2.plot(T_span, [0.5*kB]*len(T_span), '--', color='yellowgreen', label='Classical')
 for n in n_levels:
-    ax2.plot(T_range, Cv_Box_Quantum(T_range, n), '-', label=f'Quantum (n={n})')
+    ax2.plot(T_span, Cv_Box_Quantum(T_span, n), '-', label=f'Quantum (n={n})')
 ax2.set_title("Box potential")
 ax2.set_xlabel(r"$k_B T / E_g$")
 ax2.set_ylabel(r"$C_v [J/K]$")
@@ -149,8 +178,8 @@ ax2.legend()
 # Create Classical limit plot for the box potential
 '''
 fig = plt.figure(figsize=(6, 5))
-classical_limit_box, xi_converged = find_classical_limit_Box(T_range, n)
-plt.plot(T_range, classical_limit_box, '--', color='yellowgreen', label=f'Classical Limit (xi={xi_converged:.2f})')
+classical_limit_box, xi_converged = find_classical_limit_Box(T_span, n)
+plt.plot(T_span, classical_limit_box, '--', color='yellowgreen', label=f'Classical Limit (xi={xi_converged:.2f})')
 plt.title("Classical Limit for Box Potential")
 plt.xlabel(r"$k_B T / E_g$")
 plt.ylabel(r"$C_v [J/K]$")
