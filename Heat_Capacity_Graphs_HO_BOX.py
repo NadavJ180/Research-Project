@@ -7,11 +7,13 @@ m = 1.0
 L = 1.0
 h_bar = 0.1
 E_g = (h_bar**2 * np.pi**2) / (2 * m * L**2)  # Ground state energy for box potential
+tol = 1e-4
+iter = 1e4
 
 #Number of Box Potential Energy Levels
-xi_initial = 2
+xi_initial = 5
 n_levels = [100, 500]
-n = 10
+n = 1e5
 
 # Temperature range (log scale)
 T_span = np.logspace(-2, 2, 400)
@@ -47,23 +49,35 @@ def Cv_Box_Quantum(temp_ratio, n_levels):
 def Cv_Box_Classical(T, n, xi): # retuns Cv with a scaling factor for a specific T, n, and xi
     # temp_ratio = kB * T / Eg
     # En = n^2 * Eg
+    n_array = np.arange(1, n + 1)
     
-    E_n = n**2 * E_g / xi**2
-    beta = 1.0 / (T * kB)
-        
-    exp = np.exp(-beta * E_n )
+    E_n = n_array**2 * E_g / xi**2
+    beta = 1.0 / (T * kB * xi**2)
+    beta_exp = 1.0 / (T * kB)
+
+    exp_shift = - beta_exp * E_n[0]  # Shift to prevent underflow
+    exp = np.exp(-beta_exp * E_n - exp_shift)
     
     # Partition function and its derivatives
     z = np.sum(exp)
+
+    # Catch precision collapse when states become completely indistinguishable
+    if z == 0 or np.all(exp == exp[0]):
+        return 0.0
+    
     E_ave = np.sum(E_n * exp) / z
     E2_ave = np.sum(E_n**2 * exp) / z
     
+    variance = E2_ave - E_ave**2
+    if variance <= 0:
+        return 0.0
+    
     # Cv = ( <E^2> - <E>^2 ) / (kB * T^2)
-    Cv = (E2_ave - E_ave**2) * beta**2 * kB
+    Cv = variance * beta**2 * kB
 
     return Cv
 
-def check_n_convergance(T, n, xi, tolerance=1e-4, iterations=1000):
+def check_n_convergance(T, n, xi, tolerance=tol, iterations=iter):
     converged = False
     counter = 0
 
@@ -71,7 +85,7 @@ def check_n_convergance(T, n, xi, tolerance=1e-4, iterations=1000):
     Cv_curr = Cv_Box_Classical(T, n_curr, xi)
     
     while not converged and counter < iterations:
-        n_next = n_curr * 2
+        n_next = n_curr + 1
         Cv_next = Cv_Box_Classical(T, n_next, xi)
         
         rmse = np.sqrt(np.mean((Cv_next - Cv_curr)**2))
@@ -90,7 +104,7 @@ def check_n_convergance(T, n, xi, tolerance=1e-4, iterations=1000):
     else:
         return n_curr
     
-def check_xi_convergence(T, n, xi, tolerance=1e-4, iterations=1000):
+def check_xi_convergence(T, n, xi, tolerance=tol, iterations=iter):
     converged = False
     counter = 0
 
@@ -98,7 +112,7 @@ def check_xi_convergence(T, n, xi, tolerance=1e-4, iterations=1000):
     Cv_curr = Cv_Box_Classical(T, n, xi_curr)
     
     while not converged and counter < iterations:
-        xi_next = xi_curr * 2
+        xi_next = xi_curr + 1
         Cv_next = Cv_Box_Classical(T, n, xi_next)
         
         rmse = np.sqrt(np.mean((Cv_next - Cv_curr)**2))
@@ -117,7 +131,7 @@ def check_xi_convergence(T, n, xi, tolerance=1e-4, iterations=1000):
     else:
         return xi_curr
 
-def find_classical_limit_Box(T_span, n_initial, xi_initial, tolerance=1e-4):
+def find_classical_limit_Box(T_span, n_initial, xi_initial, tolerance=tol):
     Cv_classical = []
 
     for T in T_span:
