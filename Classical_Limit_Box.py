@@ -58,6 +58,7 @@ Classical limit for 1D box:  Cv_classical / kB = 0.5
 ================================================================================
 """
 
+from ast import Global
 import os
 import numpy as np
 import matplotlib.pyplot as plt
@@ -476,9 +477,29 @@ def make_plots(lc, cl, T_K_arr, cv_arr, beta_check,
     xi_label = f"ξ_conv = {xi_conv:.3f}" if xi_conv is not None else "ξ_start (not converged)"
     T_check_K = T_K_arr[len(T_K_arr)//4]   # rough marker position; actual value below
 
+    
+    # ──  Create Layout with Subplot  ────────────────────────────────
+    
+    
+    fig, axes = plt.subplots(2, 2, figsize=(16, 12), layout="constrained")
+    ax1 = axes[0, 0] # Top Left
+    ax2 = axes[0, 1] # Top Right
+    ax3 = axes[1, 0] # Bottom Left (temporarily)
+
+    # Hide the unused bottom-right spot
+    axes[1,1].set_axis_off()
+
+    # Center the bottom plot by spanning it across the middle
+    # (This shifts ax3 to start at 25% width instead of 0%)
+    # Coordinates are [left, bottom, width, height] in figure fraction units.
+    ax3.set_position([0.2, 0.12, 0.5, 0.28]) 
+
+
+    # Master title for the combined figure
+    fig.suptitle(f"Combined Quantum Thermodynamic Analysis (N = {n_levels} levels)", fontsize=16, fontweight='bold')
+
     # ── Figure 1: Cv vs Temperature in Kelvin ────────────────────────────────
-    fig1, ax1 = plt.subplots(figsize=(8, 5))
-    fig1.suptitle(
+    ax1.set_title(
         f"Cv / kB  vs  Temperature   ({xi_label},  N = {n_levels} levels)",
         fontsize=12,
     )
@@ -507,16 +528,10 @@ def make_plots(lc, cl, T_K_arr, cv_arr, beta_check,
     ax1.set_ylabel("Cv / kB", fontsize=11)
     ax1.legend(fontsize=9)
     ax1.grid(True, linestyle="--", alpha=0.5)
-    fig1.tight_layout()
-    path1 = os.path.join(save_dir, "cv_vs_temperature.png")
-    fig1.savefig(path1, dpi=150)
-    plt.close(fig1)
-    print(f"  Saved → {path1}")
 
     # ── Figure 2: Level convergence ───────────────────────────────────────────
     xi_used_str = f"{xi_conv:.4f}" if xi_conv is not None else "xi_start (fallback)"
-    fig2, ax2 = plt.subplots(figsize=(8, 5))
-    fig2.suptitle(
+    ax2.set_title(
         f"Level Convergence   (beta = {beta_check},  xi = {xi_used_str} [converged])",
         fontsize=12,
     )
@@ -557,15 +572,9 @@ def make_plots(lc, cl, T_K_arr, cv_arr, beta_check,
     ax2.set_xlabel("Number of energy levels  n", fontsize=11)
     ax2.set_ylabel("Cv / kB", fontsize=11)
     ax2.grid(True, linestyle="--", alpha=0.5)
-    fig2.tight_layout()
-    path2 = os.path.join(save_dir, "level_convergence.png")
-    fig2.savefig(path2, dpi=150)
-    plt.close(fig2)
-    print(f"  Saved → {path2}")
-
+    
     # ── Figure 3: ξ sweep ─────────────────────────────────────────────────────
-    fig3, ax3 = plt.subplots(figsize=(8, 5))
-    fig3.suptitle(
+    ax3.set_title(
         f"Classical Limit — ξ Sweep   (β = {beta_check},  N = {n_levels} levels)",
         fontsize=12,
     )
@@ -626,16 +635,18 @@ def make_plots(lc, cl, T_K_arr, cv_arr, beta_check,
         mpatches.Patch(color=GRAY,   label="rising Cv"),
     ]
     h3, l3 = ax3.get_legend_handles_labels()
-    ax3.legend(handles=h3 + dot_handles, fontsize=9)
+    ax3.legend(handles=h3 + dot_handles, fontsize=9, bbox_to_anchor=(1.02, 1.0), loc="upper left")
     ax3.set_xlabel("Scaling factor  ξ", fontsize=11)
     ax3.set_ylabel("Cv / kB", fontsize=11)
     ax3.grid(True, linestyle="--", alpha=0.5)
-    fig3.tight_layout()
-    path3 = os.path.join(save_dir, "xi_sweep.png")
-    fig3.savefig(path3, dpi=150)
-    plt.close(fig3)
-    print(f"  Saved → {path3}")
-
+    
+    # ── Save Combined Figure ─────────────────────────────────────────────
+    plt.show()
+    
+    combined_path = os.path.join(save_dir, "quantum_thermo_analysis.png")
+    fig.savefig(combined_path, dpi=150)
+    plt.close(fig)
+    print(f"  Saved Combined Layout → {combined_path}")
 
 # ================================================================================
 #  FULL PIPELINE
