@@ -8,18 +8,22 @@ FORMULA (from the image)
 The heat capacity at constant volume for a quantum system with discrete energy
 levels is derived from the partition function Z = Σ exp(-β·En/ξ²) and reads:
 
-    Cv / kB  =  (β² / ξ⁴) · [ <En²>_β  −  <En>_β² ]
+    Cv / kB  =  (β² / ξ⁴) · [ <En_(1/ξ²)²>  -  <En_(1/ξ²)>² ]
 
-where the Boltzmann-weighted average is defined as:
+Where the first and second moment of the energy levels are a function of the scaling factor ξ
 
-    <f(En)>_β  =  Σ f(En) · exp(-β·En/ξ²)  /  Z
+The scaled first and second moments of the energy levels are defined as:
+    <En_(1/ξ²)>   = Σ En/ξ² · exp(-β·En/ξ²) / Z
+    <En_(1/ξ²)²> = Σ (En/ξ²)² · exp(-β·En/ξ²) / Z
+
+  
 
 Parameters
 ──────────
     β  = 1 / (kB·T)  — inverse temperature in natural units (1/E₀)
                        T is in Kelvin; β = E₀ / (kB_SI · T[K])
-    ξ              — independent scaling factor in the energy denominator;
-                     increasing ξ → classical limit
+    ξ               — independent scaling factor in the energy denominator;
+                        increasing ξ → ∞ (classical limit)
 
 Temperature in Kelvin
 ─────────────────────
@@ -104,7 +108,7 @@ def compute_cv(energies, beta, xi):
     -------
     float  — Cv / kB,  or np.nan if the partition function is degenerate.
     """
-    energies  = np.asarray(energies, dtype=float)
+    energies  = np.asarray(energies, dtype=float) # converts to array if not already, ensures float type for calculations
     a         = beta * energies / (xi ** 2)    # exponents a_n = β·En/ξ²
     a_min     = np.min(a)                       # subtract minimum → all ≤ 0 after negation
     weights   = np.exp(-(a - a_min))            # w_n = exp(-(a_n - a_min)) ≤ 1
@@ -193,7 +197,7 @@ def check_classical_limit(
         cvs.append(cv)
 
         if step >= 1:
-            delta = abs(cv - cvs[-2])
+            delta = abs(cv - cvs[-2]) # current Cv (cv = cvs[-1]) minus previous Cv (cvs[-2])
 
             # ── Direction-agnostic convergence ───────────────────────────────
             # Count consecutive steps with |ΔCv| < tol_xi regardless of sign.
@@ -206,7 +210,7 @@ def check_classical_limit(
                 stable_cnt = 0   # reset if a large step interrupts the plateau
 
             # ── Finite-N bail-out ─────────────────────────────────────────────
-            # Detect a runaway monotone collapse that cannot self-correct.
+            # Detect a runaway monotone collapse to 0 that cannot self-correct (not enough levels).
             if step >= bail_streak:
                 recent = cvs[-(bail_streak + 1):]
                 diffs  = [recent[k+1] - recent[k] for k in range(bail_streak)]
@@ -214,12 +218,12 @@ def check_classical_limit(
                     stop_reason = "finite_n"
                     break
 
-        xi *= xi_multiplier
+        xi *= xi_multiplier # next xi iteration
 
     # Compute |ΔCv| between every consecutive pair of ξ values
-    deltas = [None] + [abs(cvs[i] - cvs[i-1]) for i in range(1, len(cvs))]
+    deltas = [None] + [abs(cvs[i] - cvs[i-1]) for i in range(1, len(cvs))] # first entry is None since there's no previous Cv to compare to
 
-    classical_reached = (stop_reason == "converged")
+    classical_reached = (stop_reason == "converged") # initialise flag for whether convergence was reached
 
     # ── Compute converged ξ and Cv as AVERAGES over the stable window ────────
     # The stable window is the last min_stable entries when convergence was met.
@@ -236,13 +240,13 @@ def check_classical_limit(
     # ── Detect any transient shoulder (a short plateau that didn't persist) ──
     # A shoulder in the ξ sweep looks like a brief stable run followed by
     # renewed change — a sign of a temporary equilibrium before the final limit.
-    stable_flags = [False] + [(d is not None and d < tol_xi) for d in deltas[1:]]
+    stable_flags = [False] + [(d is not None and d < tol_xi) for d in deltas[1:]] # First item is False, can't be stable yet
     shoulder_xi  = None
     i = 0
     while i < len(stable_flags):
-        if stable_flags[i]:
+        if stable_flags[i]:     # |ΔCv|_[i] > 0
             j = i
-            while j < len(stable_flags) and stable_flags[j]:
+            while j < len(stable_flags) and stable_flags[j]:    # Searches for |ΔCv|_[j] = 0
                 j += 1
             if j - i >= 2 and j < len(stable_flags):  # run ends before last step → shoulder
                 shoulder_xi = xis[i]
@@ -309,7 +313,7 @@ def check_level_convergence(energies, beta, xi, tol_cv, min_stable=5, verbose=Tr
     Procedure
     ---------
     Start with n = 2 levels and add one at a time up to n = N.
-    At each step, record Cv and compute |ΔCv| = |Cv(n) − Cv(n−1)|.
+    At each step, record Cv and compute |ΔCv| = |Cv(n) - Cv(n-1)|.
 
     Shoulder detection
     ------------------
@@ -322,7 +326,7 @@ def check_level_convergence(energies, beta, xi, tol_cv, min_stable=5, verbose=Tr
     True convergence
     ----------------
     A stable run that extends all the way to the last level (n = N).
-    'converged_at' is the first n of that final plateau.
+    'converged_at' is the 5th n of that final plateau (to account for potential transient behavior).
 
     Parameters
     ----------
@@ -344,7 +348,7 @@ def check_level_convergence(energies, beta, xi, tol_cv, min_stable=5, verbose=Tr
     n_values  = list(range(2, len(energies) + 1))
     cv_values = [compute_cv(energies[:n], beta, xi) for n in n_values]
 
-    # ── Step 2: successive differences |ΔCv(n) − Cv(n−1)| ───────────────────
+    # ── Step 2: successive differences |Cv(n) − Cv(n−1)| ───────────────────
     deltas = [None] + [abs(cv_values[i] - cv_values[i-1])
                        for i in range(1, len(cv_values))]
 
@@ -373,12 +377,12 @@ def check_level_convergence(energies, beta, xi, tol_cv, min_stable=5, verbose=Tr
 
     for start_idx, end_idx in runs:
         if end_idx == last_idx:
-            converged_at = n_values[start_idx]
+            converged_at = n_values[start_idx + 5] if start_idx + 5 <= last_idx else n_values[start_idx] # 5th n in the final plateau, or start if not enough levels left
         else:
             shoulders.append({
-                "start_n" : n_values[start_idx],
+                "start_n" : n_values[start_idx + 5] if start_idx + 5 <= end_idx else n_values[start_idx], # 5th n in the shoulder, or start if not enough levels in the shoulder
                 "end_n"   : n_values[end_idx],
-                "cv_value": cv_values[start_idx],
+                "cv_value": cv_values[start_idx + 5] if start_idx + 5 <= end_idx else cv_values[start_idx], # Cv at the 5th n in the shoulder, or start if not enough levels in the shoulder
             })
 
     # ── Step 6: optional console output ───────────────────────────────────────
@@ -410,7 +414,7 @@ def check_level_convergence(energies, beta, xi, tol_cv, min_stable=5, verbose=Tr
         if shoulders:
             print(f"\n  Shoulders detected ({len(shoulders)}):")
             for sh in shoulders:
-                print(f"    n = {sh['start_n']}–{sh['end_n']}  "
+                print(f"    n = {sh['start_n']} - {sh['end_n']}  "
                       f"Cv ≈ {sh['cv_value']:.6f}")
         if converged_at is not None:
             cv_conv = cv_values[n_values.index(converged_at)]
@@ -438,7 +442,7 @@ def check_level_convergence(energies, beta, xi, tol_cv, min_stable=5, verbose=Tr
 def make_plots(lc, cl, T_K_arr, cv_arr, beta_check,
                cv_classical, tol_cv, tol_xi, n_levels, save_dir):
     """
-    Produce three separate matplotlib figures and save them as PNG files.
+    Produce a single figure with three separate subplots.
 
     The temperature axis is in Kelvin throughout.
 
@@ -474,7 +478,7 @@ def make_plots(lc, cl, T_K_arr, cv_arr, beta_check,
 
     # Retrieve converged ξ for labels (None if not reached)
     xi_conv = cl["xi_converged"]
-    xi_label = f"ξ_conv = {xi_conv:.3f}" if xi_conv is not None else "ξ_start (not converged)"
+    xi_label = f"ξ_conv = {xi_conv:.3f}" if xi_conv is not None else "ξ_start [not converged]"
     T_check_K = T_K_arr[len(T_K_arr)//4]   # rough marker position; actual value below
 
     
@@ -530,9 +534,9 @@ def make_plots(lc, cl, T_K_arr, cv_arr, beta_check,
     ax1.grid(True, linestyle="--", alpha=0.5)
 
     # ── Figure 2: Level convergence ───────────────────────────────────────────
-    xi_used_str = f"{xi_conv:.4f}" if xi_conv is not None else "xi_start (fallback)"
+    xi_used_str = f"{xi_conv:.4f} [converged]" if xi_conv is not None else "xi_start [not converged]"
     ax2.set_title(
-        f"Level Convergence   (beta = {beta_check},  xi = {xi_used_str} [converged])",
+        f"Level Convergence   (beta = {beta_check},  xi = {xi_used_str})",
         fontsize=12,
     )
 
@@ -549,7 +553,7 @@ def make_plots(lc, cl, T_K_arr, cv_arr, beta_check,
         mid_n = (sh["start_n"] + sh["end_n"]) / 2
         ax2.annotate(
             f"shoulder\nCv ≈ {sh['cv_value']:.4f}",
-            xy=(mid_n, sh["cv_value"]),
+            xy=(mid_n, sh["cv_value"] + 0.3),
             fontsize=7, color=PURPLE, ha="center", va="bottom",
         )
 
@@ -623,7 +627,7 @@ def make_plots(lc, cl, T_K_arr, cv_arr, beta_check,
     else:
         ann_text = "Stopped: max xi steps reached"
     reason_colour = {"converged": GREEN, "finite_n": YELLOW, "max_steps": GRAY}
-    ax3.text(0.97, 0.06, ann_text, transform=ax3.transAxes,
+    ax3.text(0.97, 0.8, ann_text, transform=ax3.transAxes,
              ha="right", va="bottom", fontsize=8, color=reason_colour[stop],
              bbox=dict(boxstyle="round,pad=0.3", facecolor="white",
                        edgecolor=reason_colour[stop], alpha=0.85))
@@ -640,13 +644,8 @@ def make_plots(lc, cl, T_K_arr, cv_arr, beta_check,
     ax3.set_ylabel("Cv / kB", fontsize=11)
     ax3.grid(True, linestyle="--", alpha=0.5)
     
-    # ── Save Combined Figure ─────────────────────────────────────────────
+    # ── Show Combined Figure ─────────────────────────────────────────────
     plt.show()
-    
-    combined_path = os.path.join(save_dir, "quantum_thermo_analysis.png")
-    fig.savefig(combined_path, dpi=150)
-    plt.close(fig)
-    print(f"  Saved Combined Layout → {combined_path}")
 
 # ================================================================================
 #  FULL PIPELINE
@@ -670,7 +669,7 @@ def run(
     save_dir      = None,
 ):
     """
-    Full pipeline: classical limit → level convergence → Cv(T) sweep → plots.
+    Full pipeline: xi convergence → level convergence → Cv(T) sweep → plots.
 
     Order of operations
     -------------------
@@ -680,7 +679,7 @@ def run(
     3. Cv(T) sweep             — also uses xi_converged as the fixed ξ.
     4. make_plots              — temperature axis in Kelvin.
 
-    If the classical limit is NOT reached, steps 2–4 fall back to xi_start
+    If the classical limit is NOT reached, steps 2-4 fall back to xi_start
     and a warning is printed.
 
     Parameters
@@ -738,7 +737,6 @@ def run(
     cv_arr   = np.array([compute_cv(energies, b, xi_for_lc) for b in beta_arr])
 
     # ── Step 4: Plots ──────────────────────────────────────────────────────────
-    print("\n  Saving figures...")
     make_plots(lc, cl, T_K_arr, cv_arr, beta_check,
                cv_classical, tol_cv, tol_xi, len(energies), save_dir)
 
@@ -781,8 +779,8 @@ if __name__ == "__main__":
     TOL_XI        = 5e-3   # classical limit:   |ΔCv| < tol_xi
 
     # ── Plateau window and bail-out ───────────────────────────────────────────
-    MIN_STABLE_LC = 5      # min consecutive stable steps → shoulder or convergence
-    MIN_STABLE_CL = 5      # min consecutive stable steps → classical convergence
+    MIN_STABLE_LC = 5      # min consecutive stable steps for level convergence
+    MIN_STABLE_CL = 5      # min consecutive stable steps for xi convergence
     BAIL_STREAK   = 8      # monotone-fall steps before finite-N bail-out
 
     # ── ξ sweep settings ──────────────────────────────────────────────────────
