@@ -130,8 +130,8 @@ def compute_cv(energies, beta, xi):
 
 def check_classical_limit(
     energies, beta, xi_start, cv_classical,
-    xi_multiplier=1.5, tol_xi=0.005,
-    min_stable=5, bail_streak=8, max_xi_steps=80,
+    xi_multiplier, tol_xi=0.005,
+    min_stable=3, bail_streak=8, max_xi_steps=80,
     verbose=True,
 ):
     """
@@ -186,9 +186,8 @@ def check_classical_limit(
         xi_converged      — mean ξ over stable window  (or None)
         cv_converged      — mean Cv over stable window  (or None)
     """
-    xis, cvs   = [], []
+    xis, cvs = [], []
     xi          = xi_start
-    stable_cnt  = 0
     stop_reason = "max_steps"
 
     for step in range(max_xi_steps):
@@ -196,41 +195,77 @@ def check_classical_limit(
         xis.append(xi)
         cvs.append(cv)
 
-        if step >= 1:
-            delta = abs(cv - cvs[-2]) # current Cv (cv = cvs[-1]) minus previous Cv (cvs[-2])
+        if step >= 2:
+            # Check whether the last 3 Cv values have all hit the zero floor
+            last_3_cvs = np.array(cvs[-3:])
+            is_zero_floor = np.isclose(last_3_cvs, 0, atol=0.2).all()
 
-            # ── Direction-agnostic convergence ───────────────────────────────
-            # Count consecutive steps with |ΔCv| < tol_xi regardless of sign.
-            if delta < tol_xi:
-                stable_cnt += 1
-                if stable_cnt >= min_stable:
-                    stop_reason = "converged"
-                    break
-            else:
-                stable_cnt = 0   # reset if a large step interrupts the plateau
-
-            # ── Finite-N bail-out ─────────────────────────────────────────────
-            # Detect a runaway monotone collapse to 0 that cannot self-correct (not enough levels).
-            if step >= bail_streak:
-                recent = cvs[-(bail_streak + 1):]
-                diffs  = [recent[k+1] - recent[k] for k in range(bail_streak)]
-                if all(d < 0 for d in diffs) and (recent[0] - recent[-1]) > tol_xi:
+            if is_zero_floor:
+                # We have reached the cv = 0 collapse — stop here.
+                # Determine whether a real plateau existed before the zero floor.
+                # A real plateau requires at least min_stable steps with
+                # |ΔCv| < tol_xi among the pre-zero entries.
+                pre_zero_cvs = cvs[:-3]   # everything before the zero floor
+                if len(pre_zero_cvs) >= min_stable + 1:
+                    pre_deltas = [abs(pre_zero_cvs[i] - pre_zero_cvs[i-1])
+                                  for i in range(1, len(pre_zero_cvs))]
+                    # Look for ANY contiguous run of min_stable stable steps
+                    # anywhere in the pre-zero region (plateau may be early).
+                    streak = 0
+                    found_plateau = False
+                    for d in pre_deltas:
+                        if d < tol_xi:
+                            streak += 1
+                            if streak >= min_stable:
+                                found_plateau = True
+                                break
+                        else:
+                            streak = 0
+                    stop_reason = "converged" if found_plateau else "finite_n"
+                else:
                     stop_reason = "finite_n"
-                    break
+                break
 
-        xi *= xi_multiplier # next xi iteration
+        xi *= xi_multiplier
 
     # Compute |ΔCv| between every consecutive pair of ξ values
-    deltas = [None] + [abs(cvs[i] - cvs[i-1]) for i in range(1, len(cvs))] # first entry is None since there's no previous Cv to compare to
+    deltas = [None] + [abs(cvs[i] - cvs[i-1]) for i in range(1, len(cvs))]
 
-    classical_reached = (stop_reason == "converged") # initialise flag for whether convergence was reached
+    classical_reached = (stop_reason == "converged")
 
-    # ── Compute converged ξ and Cv as AVERAGES over the stable window ────────
-    # The stable window is the last min_stable entries when convergence was met.
-    # Using the mean reduces sensitivity to numerical noise at window edges.
+    # ── Compute converged ξ and Cv as mean of the last 3 pre-zero-floor values ─
+    # The sweep stops once cv hits 0.  The last 3 points *before* that collapse
+    # sit on the true Cv plateau, so their mean gives a robust converged estimate.
     if classical_reached:
-        stable_xis = xis[-min_stable:]       # ξ values in the stable window
-        stable_cvs = cvs[-min_stable:]       # Cv values in the stable window
+        # Find the end of the plateau (last index where |ΔCv| < tol_xi before zero floor)
+        pre_zero_cvs = cvs[:-3]
+        pre_deltas = [None] + [abs(pre_zero_cvs[i] - pre_zero_cvs[i-1])
+                               for i in range(1, len(pre_zero_cvs))]
+        # Walk forward to find the last contiguous stable run
+        plateau_end = None
+        i = len(pre_deltas) - 1
+        while i >= 1:
+            if pre_deltas[i] is not None and pre_deltas[i] < tol_xi:
+                plateau_end = i
+                break
+            i -= 1
+        # Walk back from plateau_end to find where the run started
+        if plateau_end is not None:
+            plat_start = plateau_end
+            while plat_start > 1 and pre_deltas[plat_start - 1] is not None and pre_deltas[plat_start - 1] < tol_xi:
+                plat_start -= 1
+            # Take the last 3 indices of the plateau (or fewer if plateau is shorter)
+            n_take = min(3, plateau_end - plat_start + 1)
+            idx_start = plateau_end - n_take + 1
+            stable_xis = xis[idx_start : plateau_end + 1]
+            stable_cvs = cvs[idx_start : plateau_end + 1]
+        else:
+            stable_xis = xis[-6:-3]
+            stable_cvs = cvs[-6:-3]
+
+        print(f'last {len(stable_xis)} plateau xis : {stable_xis}')
+        print(f'last {len(stable_cvs)} plateau cvs : {stable_cvs}')
+
         xi_converged = float(np.mean(stable_xis))
         cv_converged = float(np.mean(stable_cvs))
     else:
@@ -585,6 +620,14 @@ def make_plots(lc, cl, T_K_arr, cv_arr, beta_check,
 
     xis_cl = cl["xi_values"]
     cvs_cl = cl["cv_values"]
+    '''
+    xis_cl_plat, cvs_cl_pat = [], []
+
+    for i in range(len(cvs_cl)):
+        xis_cl_plat, cvs_cl_plat = xis_cl[i], xis_cl[i]
+        if (i >= 2) and (np.isclose(cvs_cl[i], 0)) and (np.isclose(cvs_cl[i-1], 0)) and (np.isclose(cvs_cl[i-2], 0)):
+            break
+    '''
     ax3.plot(xis_cl, cvs_cl, color=BLUE, linewidth=1.5,
              marker="s", markersize=5, label="Cv(ξ)")
     ax3.axhline(cv_classical, color=ORANGE, linewidth=1.5, linestyle="--",
@@ -779,12 +822,12 @@ if __name__ == "__main__":
     TOL_XI        = 5e-3   # classical limit:   |ΔCv| < tol_xi
 
     # ── Plateau window and bail-out ───────────────────────────────────────────
-    MIN_STABLE_LC = 5      # min consecutive stable steps for level convergence
-    MIN_STABLE_CL = 5      # min consecutive stable steps for xi convergence
+    MIN_STABLE_LC = 3      # min consecutive stable steps for level convergence
+    MIN_STABLE_CL = 5       # min consecutive stable steps for xi convergence
     BAIL_STREAK   = 8      # monotone-fall steps before finite-N bail-out
 
     # ── ξ sweep settings ──────────────────────────────────────────────────────
-    XI_MULT       = 1.3    # ξ is multiplied by this factor at each step
+    XI_MULT       = 1.2    # ξ is multiplied by this factor at each step
     MAX_XI_STEPS  = 80     # hard cap on number of ξ values tried
 
     # ── Cv(T) sweep settings ─────────────────────────────────────────────────
