@@ -1071,7 +1071,7 @@ if __name__ == "__main__":
     # The physical energies are En_dimless * E_g, but compute_cv works in
     # dimensionless units — E₀ = E_g is factored into β via E0_J.
     energies_box = np.array([n**2 for n in range(1, N_BOX + 1)], dtype=float)
-    '''
+    
     results_box = run(
         energies      = energies_box,
         E0_J          = None,         # natural-unit mode: kB=1, beta is dimensionless
@@ -1090,7 +1090,7 @@ if __name__ == "__main__":
         T_units_label = r"$k_B T / E_g$",
         # T_scale_factor is None -> defaults to 1.0 in natural-unit mode
     )
-    '''
+    
     # ────────────────────────────────────────────────────────────────────────
     #  SYSTEM 2 — 1-D QUANTUM HARMONIC OSCILLATOR
     #  En = (n + ½) · ħω   (dimensionless: En_dimless = n + 0.5,  E₀ = ħω)
@@ -1133,22 +1133,3 @@ if __name__ == "__main__":
     #  2. Call:   results_new = run(energies=energies_new, E0_J=..., ...)
     #  No other changes are needed — all convergence logic is energy-agnostic.
     # ────────────────────────────────────────────────────────────────────────
-    energies_ho1 = np.array([n + 0.5 for n in range(10 * N_HO)], dtype=float)
-    results_ho1 = run(
-        energies      = energies_ho1,
-        E0_J          = None,         # natural-unit mode: kB=1, beta is dimensionless
-        system_name   = "1-D Harmonic Oscillator",
-        beta_min      = BETA_MIN,
-        beta_max      = BETA_MAX,
-        n_beta        = N_BETA,
-        xi_start      = 10 * XI_START,
-        tol_xi        = TOL_XI,
-        min_stable_xi = MIN_STABLE_XI,
-        xi_multiplier = XI_MULT,
-        max_xi_steps  = MAX_XI_STEPS,
-        tol_cv        = TOL_CV,
-        min_stable_n  = MIN_STABLE_N,
-        cv_analytic   = 1.0,          # analytic classical limit for 1-D HO
-        T_units_label = r"$k_B T / \hbar\omega$",
-        # T_scale_factor is None -> defaults to 1.0 in natural-unit mode
-    )
