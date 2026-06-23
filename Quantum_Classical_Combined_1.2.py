@@ -388,7 +388,7 @@ if __name__ == "__main__":
     )
 
     # System 2: 1-D Harmonic Oscillator  (En = n+0.5, classical limit Cv/kB = 1.0)
-    energies_ho = np.array([n + 0.5 for n in range(500)], dtype=float)
+    energies_ho = np.array([n + 0.5 for n in range(5000)], dtype=float)
     results_ho = run(
         energies=energies_ho,
         system_name="1-D Harmonic Oscillator",
