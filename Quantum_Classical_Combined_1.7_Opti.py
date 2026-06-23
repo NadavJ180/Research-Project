@@ -3,8 +3,9 @@ import scipy.optimize as opt
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from tqdm import tqdm
+import multiprocessing
 
-from DVR_algorithm_1_1 import colbert_miller_dvr_1d
+from DVR_algorithm_1_1 import colbert_miller_dvr_1d, DisappearingTimer
 
 # ── Phase-Space Auto-Scanner & Boundary Detector ─────────────────────────────
 def auto_configure_dvr(potential_func, num_levels, shape="smooth", mass=1.0, hbar=1.0):
@@ -138,8 +139,6 @@ def converge_n(energies, beta, xi, tol_cv, min_stable):
     N = len(energies)
     n_values  = list(range(2, N+1))
     
-    # [OPTIMIZATION]: Eliminated the O(N^2) loop. Replaced with highly efficient 
-    # vectorised cumsum matrices to compute all CV levels in a single pass.
     energies_arr = np.asarray(energies, dtype=float)
     a = beta * energies_arr / (xi**2)
     w = np.exp(-(a - a.min()))
@@ -153,7 +152,7 @@ def converge_n(energies, beta, xi, tol_cv, min_stable):
         avg_E2 = E2_w_n / Z_n
         cv_array = (beta**2 / xi**4) * (avg_E2 - avg_E**2)
     
-    cv_values = cv_array[1:].tolist()  # Extract for n=2 to N
+    cv_values = cv_array[1:].tolist()  
     deltas    = [None] + [abs(cv_values[i] - cv_values[i-1]) for i in range(1, len(cv_values))]
     stable    = [False] + [(d < tol_cv) for d in deltas[1:]]
 
@@ -225,7 +224,7 @@ def sweep_temperature_range(energies, beta_arr,
     }
 
 
-def compute_quantum_cv_curve(energies, beta_arr, xi=1.0):
+def compute_quantum_heat_capacity_curve(energies, beta_arr, xi=1.0):
     return np.array([compute_cv(energies, b, xi) for b in beta_arr])
 
 
@@ -344,7 +343,7 @@ def run(energies, system_name,
 
     valid_n = n_conv[~np.isnan(n_conv)]
     n_quantum = int(np.max(valid_n)) if len(valid_n) > 0 else len(energies)
-    cv_quantum = compute_quantum_cv_curve(energies[:n_quantum], beta_arr, xi=1.0)
+    cv_quantum = compute_quantum_heat_capacity_curve(energies[:n_quantum], beta_arr, xi=1.0)
 
     valid_xi_mask = ~np.isnan(xi_conv)
     if valid_xi_mask.any():
@@ -371,12 +370,14 @@ def run(energies, system_name,
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 if __name__ == "__main__":
+    # Required for safe multiprocessing behavior across OS environments (Windows/macOS)
+    multiprocessing.freeze_support()
 
     BETA_MIN, BETA_MAX, N_BETA = 0.02, 5.0, 200
     XI_START, TOL_XI, MIN_STABLE_XI, XI_MULT, MAX_XI_STEPS = 1.0, 1e-3, 5, 1.3, 80
     TOL_CV, MIN_STABLE_N = 1e-4, 3
 
-    NUM_STATES = 5000  
+    NUM_STATES = 2500  
 
     # -------------------------------------------------------------------------
     # System 1: 1-D Particle-in-a-Box 
@@ -386,10 +387,12 @@ if __name__ == "__main__":
     
     x_min_box, x_max_box, N_box = auto_configure_dvr(box_pot, NUM_STATES, shape="hard_wall")
     
-    energies_box = colbert_miller_dvr_1d(
-        potential_func=box_pot, num_levels=NUM_STATES,
-        x_min=x_min_box, x_max=x_max_box, num_points=N_box, mass=0.5, hbar=1.0
-    )
+    # Process-isolated wrapper around the matrix solver loop
+    with DisappearingTimer("  [DVR] Running Colbert-Miller DVR Diagonalization (Box Pot)..."):
+        energies_box = colbert_miller_dvr_1d(
+            potential_func=box_pot, num_levels=NUM_STATES,
+            x_min=x_min_box, x_max=x_max_box, num_points=N_box, mass=0.5, hbar=1.0
+        )
 
     results_box = run(
         energies=energies_box, system_name="1-D Particle-in-a-Box",
@@ -406,10 +409,12 @@ if __name__ == "__main__":
     
     x_min_ho, x_max_ho, N_ho = auto_configure_dvr(ho_pot, NUM_STATES, shape="smooth")
     
-    energies_ho = colbert_miller_dvr_1d(
-        potential_func=ho_pot, num_levels=NUM_STATES,
-        x_min=x_min_ho, x_max=x_max_ho, num_points=N_ho, mass=1.0, hbar=1.0
-    )
+    # Process-isolated wrapper around the matrix solver loop
+    with DisappearingTimer("  [DVR] Running Colbert-Miller DVR Diagonalization (HO)..."):
+        energies_ho = colbert_miller_dvr_1d(
+            potential_func=ho_pot, num_levels=NUM_STATES,
+            x_min=x_min_ho, x_max=x_max_ho, num_points=N_ho, mass=1.0, hbar=1.0
+        )
 
     results_ho = run(
         energies=energies_ho, system_name="1-D Harmonic Oscillator",

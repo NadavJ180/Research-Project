@@ -3,47 +3,70 @@ import scipy.linalg as la
 import warnings
 import sys
 import time
-import threading
+import multiprocessing
 
 """
-CHANGELOG (v1.1):
-- Refactored DisappearingTimer to allow dynamic text updates for multi-pass tracking.
-- Moved the timer out of the core DVR function and into the convergence verification suite.
-- Replaced the costly (-1.0)**idx calculation with a much faster O(N) array slicing operation.
+CHANGELOG (v1.2):
+- Upgraded DisappearingTimer from threading.Thread to multiprocessing.Process.
+- This isolates the visual terminal ticker into its own OS scheduling container, 
+  preventing it from getting starved/frozen by intensive underlying LAPACK operations.
+- Implemented a multiprocessing.Queue to cleanly handle cross-process text updates.
 """
 
 class DisappearingTimer:
-    """A background threaded timer that prints elapsed time and updates its message dynamically."""
+    """A background process-based timer that prints elapsed time and updates its message dynamically,
+    preventing starvation from heavy multi-threaded underlying LAPACK/C-extension routines."""
     def __init__(self, message="Running..."):
-        self.message = message.ljust(50)
-        self.start_time = None
-        self._stop_event = threading.Event()
-        self._thread = None
+        self.initial_message = message
+        self._process = None
+        self._queue = None
+        self._stop_event = None
 
     def update_text(self, new_text):
-        self.message = new_text.ljust(50)
+        if self._queue and self._process and self._process.is_alive():
+            self._queue.put(new_text)
 
-    def _run(self):
-        while not self._stop_event.is_set():
-            elapsed = time.time() - self.start_time
-            sys.stdout.write(f"\r{self.message} [{elapsed:.1f}s]")
+    @staticmethod
+    def _run(message, stop_event, queue):
+        start_time = time.time()
+        current_message = message.ljust(50)
+        while not stop_event.is_set():
+            # Check for incoming cross-process text updates
+            while not queue.empty():
+                try:
+                    current_message = queue.get_nowait().ljust(50)
+                except:
+                    pass
+            
+            elapsed = time.time() - start_time
+            sys.stdout.write(f"\r{current_message} [{elapsed:.1f}s]")
             sys.stdout.flush()
-            self._stop_event.wait(0.1)
-        # Clear the line cleanly when done
-        sys.stdout.write("\r" + " " * (len(self.message) + 20) + "\r")
+            time.sleep(0.1)
+            
+        # Clear the terminal line cleanly upon completion
+        sys.stdout.write("\r" + " " * (len(current_message) + 20) + "\r")
         sys.stdout.flush()
 
     def __enter__(self):
-        self.start_time = time.time()
-        self._stop_event.clear()
-        self._thread = threading.Thread(target=self._run)
-        self._thread.start()
+        # Using multiprocessing context to instantiate safe cross-process primitives
+        ctx = multiprocessing.get_context()
+        self._queue = ctx.Queue()
+        self._stop_event = ctx.Event()
+        self._process = ctx.Process(
+            target=self._run, 
+            args=(self.initial_message, self._stop_event, self._queue)
+        )
+        self._process.daemon = True
+        self._process.start()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self._stop_event.set()
-        if self._thread:
-            self._thread.join()
+        if self._stop_event:
+            self._stop_event.set()
+        if self._process:
+            self._process.join(timeout=1.0)
+            if self._process.is_alive():
+                self._process.terminate()
 
 
 def colbert_miller_dvr_1d(potential_func, num_levels, x_min, x_max, num_points, mass=1.0, hbar=1.0):
@@ -57,7 +80,7 @@ def colbert_miller_dvr_1d(potential_func, num_levels, x_min, x_max, num_points, 
     # 1. Build only the first row/column 
     idx = np.arange(num_points, dtype=float)
     
-    # [Optimization]: Generate alternating signs instantly without costly powers
+    # Generate alternating signs instantly without costly powers
     alter_sign = np.ones(num_points)
     alter_sign[1::2] = -1.0
     
