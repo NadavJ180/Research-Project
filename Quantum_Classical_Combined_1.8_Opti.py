@@ -5,10 +5,11 @@ import matplotlib.patches as mpatches
 from tqdm import tqdm
 import multiprocessing
 
-from DVR_algorithm_1_1 import colbert_miller_dvr_1d, DisappearingTimer
+# Updated import to match the v1.2 backend file
+from DVR_algorithm_1_2 import colbert_miller_dvr_1d, DisappearingTimer
 
 # ── Phase-Space Auto-Scanner & Boundary Detector ─────────────────────────────
-def auto_configure_dvr(potential_func, num_levels, shape="smooth", mass=1.0, hbar=1.0):
+def auto_configure_dvr(potential_func, num_levels, shape="smooth", mass=1.0, hbar=1.0, x0_guess=0.0):
     print(f"  [Auto-Scanner] Analyzing '{shape}' potential for {num_levels} states...")
     
     if shape == "hard_wall":
@@ -27,7 +28,8 @@ def auto_configure_dvr(potential_func, num_levels, shape="smooth", mass=1.0, hba
         grid_points = int(2.4 * num_levels)
         
     elif shape == "smooth":
-        res = opt.minimize(potential_func, x0=0.0)
+        # Pass x0_guess so we can direct the optimizer away from saddle points
+        res = opt.minimize(potential_func, x0=x0_guess)
         x_bottom = res.x[0]
         v_min = res.fun
         
@@ -35,8 +37,10 @@ def auto_configure_dvr(potential_func, num_levels, shape="smooth", mass=1.0, hba
         root_func = lambda x: potential_func(x) - E_ceiling
         
         try:
-            x_right = opt.fsolve(root_func, x0=x_bottom + 1.0)[0]
-            x_left  = opt.fsolve(root_func, x0=x_bottom - 1.0)[0]
+            # Widened the initial search brackets to +/- 5.0 to robustly span 
+            # central barriers in double-well potentials without getting trapped
+            x_right = opt.fsolve(root_func, x0=x_bottom + 5.0)[0]
+            x_left  = opt.fsolve(root_func, x0=x_bottom - 5.0)[0]
         except:
             raise RuntimeError("fsolve failed to find classical turning points.")
             
@@ -361,11 +365,11 @@ if __name__ == "__main__":
     multiprocessing.freeze_support()
 
     BETA_MIN, BETA_MAX, N_BETA = 0.02, 5.0, 200
-    XI_START, TOL_XI, MIN_STABLE_XI, XI_MULT, MAX_XI_STEPS = 1.0, 1e-3, 5, 1.3, 80
+    XI_START, TOL_XI, MIN_STABLE_XI, XI_MULT, MAX_XI_STEPS = 1.0, 5e-3, 3, 1.1, 80
     TOL_CV, MIN_STABLE_N = 1e-4, 3
 
     NUM_STATES = 2500  
-
+    
     # -------------------------------------------------------------------------
     # System 1: 1-D Particle-in-a-Box 
     # -------------------------------------------------------------------------
@@ -374,7 +378,6 @@ if __name__ == "__main__":
     
     x_min_box, x_max_box, N_box = auto_configure_dvr(box_pot, NUM_STATES, shape="hard_wall")
     
-    # Process-isolated wrapper around the matrix solver loop
     with DisappearingTimer("  [DVR] Running Colbert-Miller DVR Diagonalization (Box Pot)..."):
         energies_box = colbert_miller_dvr_1d(
             potential_func=box_pot, num_levels=NUM_STATES,
@@ -396,7 +399,6 @@ if __name__ == "__main__":
     
     x_min_ho, x_max_ho, N_ho = auto_configure_dvr(ho_pot, NUM_STATES, shape="smooth")
     
-    # Process-isolated wrapper around the matrix solver loop
     with DisappearingTimer("  [DVR] Running Colbert-Miller DVR Diagonalization (HO)..."):
         energies_ho = colbert_miller_dvr_1d(
             potential_func=ho_pot, num_levels=NUM_STATES,
@@ -409,4 +411,31 @@ if __name__ == "__main__":
         xi_start=XI_START, tol_xi=TOL_XI, min_stable_xi=MIN_STABLE_XI,
         xi_multiplier=XI_MULT, max_xi_steps=MAX_XI_STEPS, tol_cv=TOL_CV, min_stable_n=MIN_STABLE_N,
         cv_analytic=1.0, T_units_label=r"$k_B T / \hbar\omega$",
+    )
+    
+    # -------------------------------------------------------------------------
+    # System 3: 1-D Symmetric Double Well
+    # -------------------------------------------------------------------------
+    # V(x) = 0.5*x^4 - 2.0*x^2 + 2.0
+    # Minima at x = +/- sqrt(2), Barrier height = +2.0 at x = 0.
+    def dw_pot(x):
+        return 0.5 * x**4 - 2.0 * x**2 + 2.0
+    
+    # We pass x0_guess=1.5 so the optimizer finds the actual minimum inside 
+    # one of the wells, bypassing the saddle point at x=0
+    x_min_dw, x_max_dw, N_dw = auto_configure_dvr(dw_pot, NUM_STATES, shape="smooth", x0_guess=1.5)
+    
+    with DisappearingTimer("  [DVR] Running Colbert-Miller DVR Diagonalization (Double Well)..."):
+        energies_dw = colbert_miller_dvr_1d(
+            potential_func=dw_pot, num_levels=NUM_STATES,
+            x_min=x_min_dw, x_max=x_max_dw, num_points=N_dw, mass=1.0, hbar=1.0
+        )
+
+    # Analytical classical limit set to None per instructions
+    results_dw = run(
+        energies=energies_dw, system_name="1-D Symmetric Double Well",
+        beta_min=BETA_MIN, beta_max=BETA_MAX, n_beta=N_BETA,
+        xi_start=XI_START, tol_xi=TOL_XI, min_stable_xi=MIN_STABLE_XI,
+        xi_multiplier=XI_MULT, max_xi_steps=MAX_XI_STEPS, tol_cv=TOL_CV, min_stable_n=MIN_STABLE_N,
+        cv_analytic=None, T_units_label=r"$k_B T / E_0$",
     )
