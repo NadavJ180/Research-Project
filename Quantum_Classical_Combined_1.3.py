@@ -367,33 +367,121 @@ def run(energies, system_name,
             "xi_conv": xi_conv, "n_conv": n_conv, "sweep": sweep}
 
 
+# ── ξ_start input with physical plateau-window bounds ────────────────────────
+def prompt_xi_start(energies, beta_min, beta_max, system_name):
+    """
+    Ask the user for xi_start and enforce that it lies inside the classical-limit
+    plateau window:
+
+        sqrt(beta * delta_E)  <<  xi  <<  sqrt(beta * E_max)
+
+    Over the full beta sweep [beta_min, beta_max] the window edges vary with
+    temperature.  We expose the *tightest* (most restrictive) edge at each end:
+
+      Lower bound — tightest at beta_max (coldest T, largest lower edge):
+          xi_lo = sqrt(beta_max * delta_E)
+
+      Upper bound — tightest at beta_min (hottest T, smallest upper edge):
+          xi_hi = sqrt(beta_min * E_max)
+
+    xi_start must satisfy  xi_lo  <  xi_start  <  xi_hi.
+    Values outside this interval cannot land on the classical-limit plateau.
+    """
+    delta_E = float(energies[1] - energies[0])   # ground-state energy spacing
+    E_max   = float(energies[-1])                 # highest level in the set
+
+    # Tightest edges across the entire beta sweep
+    xi_lo = np.sqrt(beta_max * delta_E)
+    xi_hi = np.sqrt(beta_min * E_max)
+
+    # ── Print the bounds clearly so the user knows what to enter ─────────────
+    print(f"\n{'─'*62}")
+    print(f"  {system_name} — ξ_start selection")
+    print(f"{'─'*62}")
+    print(f"  Plateau-window condition:")
+    print(f"      √(β·ΔE)  <<  ξ  <<  √(β·E_max)")
+    print()
+    print(f"  Over your β sweep  [{beta_min}, {beta_max}]  the binding limits are:")
+    print(f"    Lower bound  (tightest at β_max = {beta_max}):")
+    print(f"        xi_lo = √(β_max · ΔE)  = √({beta_max} · {delta_E:.4g})"
+          f"  =  {xi_lo:.4f}")
+    print(f"    Upper bound  (tightest at β_min = {beta_min}):")
+    print(f"        xi_hi = √(β_min · E_max) = √({beta_min} · {E_max:.4g})"
+          f"  =  {xi_hi:.4f}")
+    print()
+
+    # Warn if no valid window exists (can happen with very wide beta ranges)
+    if xi_lo >= xi_hi:
+        print(f"  ⚠  WARNING: xi_lo ({xi_lo:.4f}) ≥ xi_hi ({xi_hi:.4f}).")
+        print(f"     No valid plateau window exists for this β range.")
+        print(f"     Consider narrowing [beta_min, beta_max] or increasing N_MAX.")
+
+    print(f"  ➜  Valid range:  {xi_lo:.4f}  <  ξ_start  <  {xi_hi:.4f}")
+    print(f"{'─'*62}")
+
+    # ── Input loop: keep asking until a valid value is entered ───────────────
+    while True:
+        raw = input(f"  Enter ξ_start for {system_name}: ").strip()
+        try:
+            val = float(raw)
+        except ValueError:
+            print(f"  ✗  '{raw}' is not a number.  Please enter a numeric value.")
+            continue
+
+        if val <= 0:
+            print(f"  ✗  ξ_start must be positive.")
+        elif val <= xi_lo:
+            print(f"  ✗  {val:.4f} ≤ lower bound {xi_lo:.4f}  [√(β_max·ΔE)].")
+            print(f"     At the coldest temperature the plateau has not yet begun.")
+            print(f"     Enter a value strictly greater than  {xi_lo:.4f}.")
+        elif val >= xi_hi:
+            print(f"  ✗  {val:.4f} ≥ upper bound {xi_hi:.4f}  [√(β_min·E_max)].")
+            print(f"     At the hottest temperature the plateau has already collapsed.")
+            print(f"     Enter a value strictly less than  {xi_hi:.4f}.")
+        else:
+            print(f"  ✓  ξ_start = {val:.4f} accepted"
+                  f"  (inside plateau window [{xi_lo:.4f}, {xi_hi:.4f}]).")
+            print(f"{'─'*62}\n")
+            return val
+
+
 # ── Entry point ───────────────────────────────────────────────────────────────
 if __name__ == "__main__":
 
-    # Shared sweep settings
+    # Shared sweep settings (xi_start is now entered per system below)
     BETA_MIN, BETA_MAX, N_BETA = 0.02, 5.0, 200
-    XI_START, TOL_XI, MIN_STABLE_XI, XI_MULT, MAX_XI_STEPS = 1.0, 1e-3, 5, 1.3, 80
+    TOL_XI, MIN_STABLE_XI, XI_MULT, MAX_XI_STEPS = 1e-3, 5, 1.3, 80
     TOL_CV, MIN_STABLE_N = 1e-4, 3
 
-    # System 1: 1-D Particle-in-a-Box  (En = n², classical limit Cv/kB = 0.5)
+    # ── System 1: 1-D Particle-in-a-Box  (En = n², classical limit Cv/kB = 0.5)
     energies_box = np.array([n**2 for n in range(1, 501)], dtype=float)
+
+    # Ask the user for xi_start; bounds are computed from the energies + beta sweep
+    xi_start_box = prompt_xi_start(energies_box, BETA_MIN, BETA_MAX,
+                                   "1-D Particle-in-a-Box")
+
     results_box = run(
         energies=energies_box,
         system_name="1-D Particle-in-a-Box",
         beta_min=BETA_MIN, beta_max=BETA_MAX, n_beta=N_BETA,
-        xi_start=XI_START, tol_xi=TOL_XI, min_stable_xi=MIN_STABLE_XI,
+        xi_start=xi_start_box, tol_xi=TOL_XI, min_stable_xi=MIN_STABLE_XI,
         xi_multiplier=XI_MULT, max_xi_steps=MAX_XI_STEPS,
         tol_cv=TOL_CV, min_stable_n=MIN_STABLE_N,
         cv_analytic=0.5, T_units_label=r"$k_B T / E_g$",
     )
 
-    # System 2: 1-D Harmonic Oscillator  (En = n+0.5, classical limit Cv/kB = 1.0)
-    energies_ho = np.array([n + 0.5 for n in range(500)], dtype=float)
+    # ── System 2: 1-D Harmonic Oscillator  (En = n+0.5, classical limit Cv/kB = 1.0)
+    energies_ho = np.array([n + 0.5 for n in range(5000)], dtype=float)
+
+    # Ask the user for xi_start; bounds differ because the HO spectrum is different
+    xi_start_ho = prompt_xi_start(energies_ho, BETA_MIN, BETA_MAX,
+                                  "1-D Harmonic Oscillator")
+
     results_ho = run(
         energies=energies_ho,
         system_name="1-D Harmonic Oscillator",
         beta_min=BETA_MIN, beta_max=BETA_MAX, n_beta=N_BETA,
-        xi_start=XI_START, tol_xi=TOL_XI, min_stable_xi=MIN_STABLE_XI,
+        xi_start=xi_start_ho, tol_xi=TOL_XI, min_stable_xi=MIN_STABLE_XI,
         xi_multiplier=XI_MULT, max_xi_steps=MAX_XI_STEPS,
         tol_cv=TOL_CV, min_stable_n=MIN_STABLE_N,
         cv_analytic=1.0, T_units_label=r"$k_B T / \hbar\omega$",
