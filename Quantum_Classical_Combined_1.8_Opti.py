@@ -8,6 +8,22 @@ import multiprocessing
 # Updated import to match the v1.2 backend file
 from DVR_algorithm_1_2 import colbert_miller_dvr_1d, DisappearingTimer
 
+"""
+VERSION 1.8 UPDATE (June 2026):
+- Parameter Optimization for Double Well Systems:
+    - Reduced XI_MULT from 1.3 to 1.1: Allows for a granular search through 
+      narrow classical plateaus, preventing the algorithm from skipping them.
+    - Updated MIN_STABLE_XI to 3: Relaxes the strict convergence requirement to 
+      accommodate the physical slope in Wigner-Kirkwood expanded potentials.
+    - Adjusted TOL_XI to 5e-3: Accommodates the slight natural slope observed 
+      in the classical plateau of quartic double-well potentials.
+    - Enhanced Potential Handling: Added specific support for quartic double-well 
+      potentials, accounting for the slower n^(4/3) energy level growth, which 
+      requires denser state-space sampling compared to harmonic systems.
+- These changes allow for stable convergence while maintaining NUM_STATES = 2500, 
+  avoiding the 8x computational cost of higher-level expansions.
+"""
+
 # ── Phase-Space Auto-Scanner & Boundary Detector ─────────────────────────────
 def auto_configure_dvr(potential_func, num_levels, shape="smooth", mass=1.0, hbar=1.0, x0_guess=0.0):
     print(f"  [Auto-Scanner] Analyzing '{shape}' potential for {num_levels} states...")
@@ -364,7 +380,7 @@ if __name__ == "__main__":
     # Required for safe multiprocessing behavior across OS environments (Windows/macOS)
     multiprocessing.freeze_support()
 
-    BETA_MIN, BETA_MAX, N_BETA = 0.02, 5.0, 200
+    BETA_MIN, BETA_MAX, N_BETA = 0.1, 10.0, 200
     XI_START, TOL_XI, MIN_STABLE_XI, XI_MULT, MAX_XI_STEPS = 1.0, 5e-3, 3, 1.1, 80
     TOL_CV, MIN_STABLE_N = 1e-4, 3
 
