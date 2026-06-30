@@ -380,12 +380,13 @@ if __name__ == "__main__":
     # Required for safe multiprocessing behavior across OS environments (Windows/macOS)
     multiprocessing.freeze_support()
 
-    BETA_MIN, BETA_MAX, N_BETA = 0.1, 10.0, 200
-    XI_START, TOL_XI, MIN_STABLE_XI, XI_MULT, MAX_XI_STEPS = 1.0, 5e-3, 3, 1.1, 80
+    BETA_MIN, BETA_MAX, N_BETA = 0.01, 100.0, 1000
+    XI_START, TOL_XI, MIN_STABLE_XI, XI_MULT, MAX_XI_STEPS = 3.0, 1e-3, 5, 1.2, 150
     TOL_CV, MIN_STABLE_N = 1e-4, 3
 
-    NUM_STATES = 2500  
+    NUM_STATES = 3500  
     
+    """
     # -------------------------------------------------------------------------
     # System 1: 1-D Particle-in-a-Box 
     # -------------------------------------------------------------------------
@@ -407,7 +408,7 @@ if __name__ == "__main__":
         xi_multiplier=XI_MULT, max_xi_steps=MAX_XI_STEPS, tol_cv=TOL_CV, min_stable_n=MIN_STABLE_N,
         cv_analytic=0.5, T_units_label=r"$k_B T / E_g$",
     )
-
+    """
     # -------------------------------------------------------------------------
     # System 2: 1-D Harmonic Oscillator 
     # -------------------------------------------------------------------------
@@ -429,6 +430,7 @@ if __name__ == "__main__":
         cv_analytic=1.0, T_units_label=r"$k_B T / \hbar\omega$",
     )
     
+    """
     # -------------------------------------------------------------------------
     # System 3: 1-D Symmetric Double Well
     # -------------------------------------------------------------------------
@@ -455,3 +457,4 @@ if __name__ == "__main__":
         xi_multiplier=XI_MULT, max_xi_steps=MAX_XI_STEPS, tol_cv=TOL_CV, min_stable_n=MIN_STABLE_N,
         cv_analytic=None, T_units_label=r"$k_B T / E_0$",
     )
+    """
