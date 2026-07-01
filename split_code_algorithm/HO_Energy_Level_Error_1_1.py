@@ -1,5 +1,5 @@
 """
-HO_Energy_Level_Error_1_0.py
+HO_Energy_Level_Error_1_1.py
 =====================================================================
 WHAT THIS FILE DOES
 ---------------------------------------------------------------------
@@ -16,11 +16,15 @@ have no analytic answer to compare against. Establishing the
 accuracy here, where the truth is known exactly, tells you how much
 to trust the same solver elsewhere.
 
-CHANGELOG (NEW FILE, v1.0)
+CHANGELOG (v1.0 -> v1.1)
 ---------------------------------------------------------------------
-- New file, written specifically to benchmark DVR_Algorithm_1_3.py's
-  accuracy against HO_Analytical_1_0.py's exact energy levels. Did
-  not exist in any previous version of the project.
+- No logic change. Clarified the docstring of
+  `compute_energy_level_errors` to make explicit that, despite this
+  file's HO-specific name, that one function only ever compares two
+  plain energy arrays and has no HO-specific assumptions baked in --
+  it is reused as-is by DVR_Limit_Finder_1_0.py for general systems,
+  where the second array may be a finer numerical reference solution
+  instead of an analytic one.
 =====================================================================
 """
 
@@ -34,15 +38,23 @@ import matplotlib.pyplot as plt
 def compute_energy_level_errors(E_numeric, E_analytic):
     """
     Compute level-by-level absolute and relative error between a
-    numerically computed energy spectrum and the exact analytic
-    spectrum it should match, plus a few summary statistics.
+    numerically computed energy spectrum and a ground-truth spectrum
+    it should match, plus a few summary statistics.
+
+    NOTE ON GENERALITY: nothing in this function is HO-specific -- it
+    only ever compares two plain arrays of the same length. `E_analytic`
+    is named for this file's primary use case (an exact closed-form
+    spectrum), but it can equally be a finer/independently-verified
+    numerical reference solution for systems with no analytic answer.
+    DVR_Limit_Finder_1_0.py reuses this exact function for that purpose.
 
     Parameters
     ----------
     E_numeric : array_like
         Numerically computed energy levels (e.g. from DVR), ascending.
     E_analytic : array_like
-        Exact analytic energy levels, same length and ordering as
+        Ground-truth energy levels to compare against (analytic, or a
+        finer numerical reference), same length and ordering as
         E_numeric (state n in E_numeric must correspond to state n
         in E_analytic).
 

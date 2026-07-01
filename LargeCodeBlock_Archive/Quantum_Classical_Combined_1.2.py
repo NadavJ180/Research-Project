@@ -371,7 +371,7 @@ def run(energies, system_name,
 if __name__ == "__main__":
 
     # Shared sweep settings
-    BETA_MIN, BETA_MAX, N_BETA = 0.02, 5.0, 200
+    BETA_MIN, BETA_MAX, N_BETA = 0.002, 4.0, 200
     XI_START, TOL_XI, MIN_STABLE_XI, XI_MULT, MAX_XI_STEPS = 1.0, 1e-3, 5, 1.3, 80
     TOL_CV, MIN_STABLE_N = 1e-4, 3
 

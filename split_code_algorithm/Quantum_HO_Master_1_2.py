@@ -1,5 +1,5 @@
 """
-Quantum_HO_Master_1_0.py
+Quantum_HO_Master_1_2.py
 =====================================================================
 WHAT THIS FILE DOES
 ---------------------------------------------------------------------
@@ -11,24 +11,20 @@ independently without this file needing structural changes:
 
     SECTION 1 -- DVR setup & diagonalization      (DVR_Algorithm_1_3)
     SECTION 2 -- Analytic HO energy levels         (HO_Analytical_1_0)
-    SECTION 3 -- Energy-level accuracy check       (HO_Energy_Level_Error_1_0)
+    SECTION 3 -- Energy-level accuracy check       (HO_Energy_Level_Error_1_1)
     SECTION 4 -- General Cv pipeline (numerical)   (Quantum_Classical_Combined_1_9)
     SECTION 5 -- Numerical vs analytical benchmark (HO_Benchmark_1_0)
+    SECTION 6 -- DVR limit analysis (resolution &
+                 level-count breakdown points)     (DVR_Limit_Finder_1_1)
 
-Run this file directly (`python Quantum_HO_Master_1_0.py`) to execute
-the full pipeline end-to-end and produce every plot described in the
-project spec: numerical-vs-analytic HO energy levels (with a zoom on
-the largest-error region), the energy-level error curve, the general
-quantum/classical Cv(T) diagnostics, and the final numerical-vs-
-analytical Cv(T) + classical-limit benchmark with its own error curve.
-
-CHANGELOG (NEW FILE, v1.0)
+CHANGELOG (v1.1 -> v1.2)
 ---------------------------------------------------------------------
-- New file. Replaces the old pattern of hard-coding systems at the
-  bottom of Quantum_Classical_Combined_*.py's __main__ block. The HO
-  system now lives entirely here, as a thin orchestration layer over
-  the dedicated modules, leaving every other file free of
-  system-specific wiring.
+- Section 6 now imports DVR_Limit_Finder_1_1 instead of 1_0.
+  The resolution-limit search (A) now searches in dx-space instead of
+  num_points-space: the x-axis of its plot is grid spacing dx (a
+  directly physical parameter), and the primary reported result is
+  maximum_dx rather than minimum_grid_points. No change to search B
+  (level-count limit) or to Sections 1-5.
 =====================================================================
 """
 
@@ -36,7 +32,7 @@ import multiprocessing
 
 from DVR_Algorithm_1_3 import auto_configure_dvr, get_fully_converged_energy_levels
 from HO_Analytical_1_0 import analytic_energy_levels_HO, analytic_cv_HO_classical
-from HO_Energy_Level_Error_1_0 import (
+from HO_Energy_Level_Error_1_1 import (
     compute_energy_level_errors,
     plot_energy_level_comparison,
     plot_energy_level_error,
@@ -44,6 +40,7 @@ from HO_Energy_Level_Error_1_0 import (
 )
 from Quantum_Classical_Combined_1_9 import run as run_general_cv_pipeline
 from HO_Benchmark_1_0 import run_ho_benchmark
+from DVR_Limit_Finder_1_1 import run_dvr_limit_analysis
 
 
 if __name__ == "__main__":
@@ -52,17 +49,17 @@ if __name__ == "__main__":
 
     # =================================================================
     # SECTION 0 -- Global configuration
-    # =================================================================
+    # ================================================================= 
     # Physical constants for the Harmonic Oscillator (dimensionless units).
     MASS, HBAR, OMEGA, KB = 1.0, 1.0, 1.0, 1.0
 
     # Number of energy levels to compute. Kept modest here so the full
     # benchmark runs quickly; raise it for a more thorough DVR accuracy
     # sweep (the highest states will show the most truncation error).
-    NUM_STATES = 1000
+    NUM_STATES = 500
 
     # Temperature/beta sweep range for the Cv pipeline.
-    BETA_MIN, BETA_MAX, N_BETA = 0.05, 50.0, 1000
+    BETA_MIN, BETA_MAX, N_BETA = 0.1, 50.0, 500
 
     # xi/n convergence-search parameters for the numerical classical limit.
     XI_START, TOL_XI, MIN_STABLE_XI, XI_MULT, MAX_XI_STEPS = 3.0, 5e-3, 3, 1.1, 80
@@ -115,3 +112,29 @@ if __name__ == "__main__":
     #              limit overlay, with quantitative error curve)
     # =================================================================
     benchmark_results = run_ho_benchmark(numeric_results, hbar=HBAR, omega=OMEGA, kB=KB)
+
+    # =================================================================
+    # SECTION 6 -- DVR limit analysis: where does the smooth-potential
+    #              solver actually break down for this system?
+    # =================================================================
+    # Reuses the exact grid built in Section 1 (x_min, x_max, n_grid) so
+    # this directly answers "how much headroom does that grid have?":
+    #   - Resolution limit: holding NUM_STATES levels and the same span
+    #     fixed, how few grid points could we have gotten away with?
+    #   - Level-count limit: holding that same grid fixed, how many
+    #     levels past NUM_STATES could we still trust?
+    # The reference spectrum here is HO_Analytical's exact energies --
+    # for a future system with no closed-form answer, swap this for a
+    # separately verified, much finer numerical DVR run instead; every
+    # other argument to run_dvr_limit_analysis stays the same.
+    LIMIT_TOLERANCE = 1e-6
+    reference_for_limits = analytic_energy_levels_HO(n_grid, hbar=HBAR, omega=OMEGA)
+
+    limit_results = run_dvr_limit_analysis(
+        potential_func=ho_potential, system_name="1-D Harmonic Oscillator",
+        reference_energies=reference_for_limits,
+        num_levels_for_grid_search=NUM_STATES, x_min=x_min, x_max=x_max,
+        num_points_for_level_search=n_grid,
+        tolerance=LIMIT_TOLERANCE, metric="max_abs",
+        mass=MASS, hbar=HBAR,
+    )
