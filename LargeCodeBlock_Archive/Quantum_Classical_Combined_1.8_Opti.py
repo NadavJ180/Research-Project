@@ -6,7 +6,7 @@ from tqdm import tqdm
 import multiprocessing
 
 # Updated import to match the v1.2 backend file
-from DVR_algorithm_1_2 import colbert_miller_dvr_1d, DisappearingTimer
+from LargeCodeBlock_Archive.DVR_algorithm_1_2 import colbert_miller_dvr_1d, DisappearingTimer
 
 """
 VERSION 1.8 UPDATE (June 2026):
