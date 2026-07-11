@@ -51,8 +51,8 @@ CHANGELOG (v1.1 -> v1.2)
 import numpy as np
 import matplotlib.pyplot as plt
 
-from DVR_Algorithm_1_4 import colbert_miller_dvr_1d
-from HO_Energy_Level_Error_1_1 import compute_energy_level_errors
+from DVR_Algorithm import colbert_miller_dvr_1d
+from HO_Energy_Level_Error import compute_energy_level_errors
 
 
 # =====================================================================

@@ -42,7 +42,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from tqdm import tqdm
 
-from Classical_Limit_Numerical_1_0 import compute_cv, sweep_temperature_range
+from Classical_Limit_Numerical import compute_cv, sweep_temperature_range
 
 
 # =====================================================================

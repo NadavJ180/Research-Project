@@ -1,5 +1,5 @@
 """
-HO_Benchmark_1_0.py
+HO_Benchmark_1_1.py
 =====================================================================
 WHAT THIS FILE DOES
 ---------------------------------------------------------------------
@@ -7,31 +7,25 @@ HO-only benchmark layer: takes the NUMERICAL results already produced
 by Quantum_Classical_Combined_1_9.py's `run()` (the true quantum
 Cv(T) curve from DVR energies + the numerically found classical
 limit Cv(T)) and overlays them against the ANALYTICAL Harmonic
-Oscillator solutions from HO_Analytical_1_0.py (the exact
+Oscillator solutions from HO_Analytical_1_0.py (the exact Einstein
 Cv(T) formula + the exact classical limit, k_B). It then quantifies
 the agreement (absolute/relative error vs temperature) and plots
 everything together.
 
-This is the piece that is only meaningful for a system with a known
-closed-form answer -- which is exactly why it is HO-only. For future
-systems with no analytic solution, this file is simply not
-applicable; only the general pipeline (Quantum_Classical_Combined)
-and DVR engine apply there.
-
-CHANGELOG (NEW FILE, v1.0)
+CHANGELOG (v1.0 -> v1.1)
 ---------------------------------------------------------------------
-- New file. Did not exist in any previous version of the project.
-  Pulls together Quantum_Classical_Combined_1_9.run()'s numerical
-  output with HO_Analytical_1_0.py's exact formulas to produce a
-  dedicated benchmark comparison, including a quantitative Cv(T)
-  error curve that the general pipeline alone does not produce.
+- Removed "Einstein" and "analytic" from all plot labels. Curves are
+  now labelled simply as "numerical" vs "analytical" throughout, so
+  the same label style generalises cleanly to future systems where
+  the reference might be a finer numerical solution rather than a
+  known analytic formula.
 =====================================================================
 """
 
 import numpy as np
 import matplotlib.pyplot as plt
 
-from HO_Analytical_1_0 import analytic_cv_HO_quantum, analytic_cv_HO_classical
+from HO_Analytical import analytic_cv_HO_quantum, analytic_cv_HO_classical
 
 
 # =====================================================================
@@ -109,7 +103,7 @@ def plot_ho_cv_benchmark(T_arr, cv_quantum_numeric, cv_quantum_analytic,
     cv_quantum_numeric : ndarray
         Quantum Cv(T) computed numerically from DVR energies.
     cv_quantum_analytic : ndarray
-        Exact analytic quantum Cv(T).
+        Exact analytic quantum Cv(T) (Einstein oscillator formula).
     cv_classical_numeric : ndarray
         Numerically found classical-limit Cv(T) (xi/n convergence).
     cv_classical_analytic : float
@@ -131,9 +125,9 @@ def plot_ho_cv_benchmark(T_arr, cv_quantum_numeric, cv_quantum_analytic,
 
     # --- Top panel: the four Cv curves together ---
     ax_top.plot(T_arr, cv_quantum_numeric, color=BLUE, linewidth=2, label="Quantum Cv(T) \u2014 numerical (DVR)")
-    ax_top.plot(T_arr, cv_quantum_analytic, color=ORANGE, linewidth=1.6, linestyle="--", label="Quantum Cv(T) \u2014 analytic")
+    ax_top.plot(T_arr, cv_quantum_analytic, color=ORANGE, linewidth=1.6, linestyle="--", label="Quantum Cv(T) \u2014 analytical")
     ax_top.plot(T_arr, cv_classical_numeric, color=GREEN, linewidth=1.8, linestyle="-.", label="Classical limit \u2014 numerical")
-    ax_top.axhline(cv_classical_analytic, color=PURPLE, linewidth=1.5, linestyle=":", label=f"Classical limit \u2014 analytic ($k_B$ = {cv_classical_analytic:.3g})")
+    ax_top.axhline(cv_classical_analytic, color=PURPLE, linewidth=1.5, linestyle=":", label=f"Classical limit \u2014 analytical ($k_B$ = {cv_classical_analytic:.3g})")
     ax_top.set_ylabel(r"$C_v \,/\, k_B$", fontsize=12)
     ax_top.set_xscale("log")
     ax_top.legend(fontsize=9, loc="upper left")

@@ -41,17 +41,17 @@ import threading
 import time
 import multiprocessing
 
-from DVR_Algorithm_1_4 import auto_configure_dvr, get_fully_converged_energy_levels
-from HO_Analytical_1_0 import analytic_energy_levels_HO, analytic_cv_HO_classical
-from HO_Energy_Level_Error_1_1 import (
+from DVR_Algorithm import auto_configure_dvr, get_fully_converged_energy_levels
+from HO_Analytical import analytic_energy_levels_HO, analytic_cv_HO_classical
+from HO_Energy_Level_Error import (
     compute_energy_level_errors,
     plot_energy_level_comparison,
     plot_energy_level_error,
     print_accuracy_summary,
 )
-from Quantum_Classical_Combined_1_9 import run as run_general_cv_pipeline
-from HO_Benchmark_1_1 import run_ho_benchmark
-from DVR_Limit_Finder_1_2 import run_dvr_limit_analysis
+from Quantum_Classical_Combined import run as run_general_cv_pipeline
+from HO_Benchmark import run_ho_benchmark
+from DVR_Limit_Finder import run_dvr_limit_analysis
 
 
 # =====================================================================
