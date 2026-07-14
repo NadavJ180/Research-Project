@@ -12,3 +12,8 @@ Results_*/
 # Ignore Python bytecode and cache directories
 __pycache__/
 *.py[cod]
+
+# Ignores plots and figures
+figures/
+*.png
+*.jpeg

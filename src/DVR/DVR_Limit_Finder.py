@@ -1,5 +1,5 @@
 """
-DVR_Limit_Finder_1_2.py
+DVR_Limit_Finder_1_3.py
 =====================================================================
 WHAT THIS FILE DOES
 ---------------------------------------------------------------------
@@ -36,15 +36,34 @@ generalization path: this file is what you reach for to sanity-check
 DVR accuracy on a brand-new potential once HO_Analytical_1_0.py-style
 ground truth is no longer available.
 
-CHANGELOG (v1.1 -> v1.2)
+CHANGELOG (v1.2 -> v1.3)
 ---------------------------------------------------------------------
-- Removed per-point num_points annotations from `plot_grid_limit_search`.
-  The dx x-axis is self-sufficient; the annotation numbers were visually
-  cluttered, especially when bisection produces many closely-spaced
-  points near the breakdown. The maximum_dx boundary label in the
-  legend still reports the corresponding num_points as a secondary
-  reference.
-- Updated imports to DVR_Algorithm_1_4 (timer removed from DVR file).
+- Changed the default error metric from "max_abs" to "max_rel" in
+  all three public functions: `find_minimum_grid_points`,
+  `find_maximum_levels`, and `run_dvr_limit_analysis`.
+
+  This affects both the PASS/FAIL criterion (the bisection searches
+  for the boundary where the relative error crosses the tolerance)
+  and the PLOTTED VALUE (the y-axis of both plots now shows
+  max|ΔEₙ/Eₙ|). Keeping the criterion and the plot on the same
+  metric ensures the tolerance line in the plot directly corresponds
+  to the pass/fail boundary that was searched for.
+
+  WHY RELATIVE ERROR?
+  Absolute error |ΔEₙ| grows with state index n because higher
+  states have larger energies and proportionally larger grid
+  truncation effects. Relative error |ΔEₙ/Eₙ| is nearly constant
+  across n for a well-resolved grid, making the "floor" of the
+  error-vs-dx (or error-vs-n) plot flat and easy to read. The
+  breakdown cliff is still sharp in both metrics; the difference
+  is that the safe region is a clean horizontal line in relative
+  error but a sloped line in absolute error. The tolerance value
+  (e.g. 1e-6) is now dimensionless: 1 part per million relative
+  accuracy across all requested levels.
+
+- Y-axis labels in `plot_grid_limit_search` and
+  `plot_level_limit_search` updated to read
+  "Relative error  max|ΔEₙ/Eₙ|" rather than "Error (metric)".
 =====================================================================
 """
 
@@ -142,7 +161,7 @@ def _dx_to_pts(dx, x_min, x_max, hard_floor):
 # (A) Resolution limit: grow dx at fixed n and fixed span
 # =====================================================================
 def find_minimum_grid_points(potential_func, num_levels, x_min, x_max, reference_energies,
-                              tolerance=1e-6, metric="max_abs", mass=1.0, hbar=1.0,
+                              tolerance=1e-6, metric="max_rel", mass=1.0, hbar=1.0,
                               dx_start=None, grow_factor=1.15,
                               max_anchor_pts=200_000, verbose=True):
     """
@@ -339,7 +358,7 @@ def find_minimum_grid_points(potential_func, num_levels, x_min, x_max, reference
 # (B) Level-count limit: grow n at a fixed grid (fixed dx)
 # =====================================================================
 def find_maximum_levels(potential_func, x_min, x_max, num_points, reference_energies,
-                         tolerance=1e-6, metric="max_abs", mass=1.0, hbar=1.0,
+                         tolerance=1e-6, metric="max_rel", mass=1.0, hbar=1.0,
                          n_start=None, grow_factor=1.3, verbose=True):
     """
     Find the LEVEL-COUNT LIMIT of the DVR solver: for a FIXED grid
@@ -491,13 +510,15 @@ def find_maximum_levels(potential_func, x_min, x_max, num_points, reference_ener
 # =====================================================================
 def plot_grid_limit_search(grid_result, system_name="System"):
     """
-    Plot error vs grid spacing dx from a `find_minimum_grid_points`
+    Plot relative error vs grid spacing dx from a `find_minimum_grid_points`
     trace, with the tolerance line and the maximum_dx boundary marked.
 
     The x-axis runs from fine (small dx, left) to coarse (large dx,
     right), matching the natural reading direction: "anything to the
-    left of the green line is safe". Each point is annotated with its
-    corresponding num_points so no physical detail is hidden.
+    left of the green line is safe". The y-axis shows the maximum
+    relative error max|ΔEₙ/Eₙ| across all tested levels, so the
+    safe flat floor is horizontal and easy to read regardless of how
+    large the absolute energies are.
 
     Parameters
     ----------
@@ -541,7 +562,7 @@ def plot_grid_limit_search(grid_result, system_name="System"):
     )
 
     ax.set_xlabel(r"Grid spacing  $\Delta x$", fontsize=12)
-    ax.set_ylabel(f"Error  ({grid_result['metric']})", fontsize=11)
+    ax.set_ylabel(r"Relative error  $\max_n |\Delta E_n / E_n|$", fontsize=11)
     ax.set_yscale("log")
     ax.legend(fontsize=9)
     ax.grid(True, linestyle="--", alpha=0.4)
@@ -554,11 +575,15 @@ def plot_grid_limit_search(grid_result, system_name="System"):
 # =====================================================================
 def plot_level_limit_search(level_result, system_name="System"):
     """
-    Plot error vs number-of-levels-requested from a `find_maximum_levels`
-    trace, with the tolerance line and the maximum trustworthy n marked.
-    The fixed grid spacing dx is shown in the subplot title so these
-    results sit on the same physical footing as the resolution-limit
-    plot above.
+    Plot relative error vs number-of-levels-requested from a
+    `find_maximum_levels` trace, with the tolerance line and the maximum
+    trustworthy n marked. The fixed grid spacing dx is shown in the
+    subplot title so these results sit on the same physical footing as
+    the resolution-limit plot above.
+
+    The y-axis shows the maximum relative error max|ΔEₙ/Eₙ| across
+    the n levels tested at each step. This gives a flat safe floor
+    that is easy to compare across different potentials and energy scales.
 
     Parameters
     ----------
@@ -600,7 +625,7 @@ def plot_level_limit_search(level_result, system_name="System"):
             label=f"Maximum trustworthy n = {level_result['maximum_levels']}",
         )
     ax.set_xlabel("Number of levels requested  n", fontsize=11)
-    ax.set_ylabel(f"Error  ({level_result['metric']})", fontsize=11)
+    ax.set_ylabel(r"Relative error  $\max_n |\Delta E_n / E_n|$", fontsize=11)
     ax.set_yscale("log")
     ax.legend(fontsize=9)
     ax.grid(True, linestyle="--", alpha=0.4)
@@ -614,7 +639,7 @@ def plot_level_limit_search(level_result, system_name="System"):
 def run_dvr_limit_analysis(potential_func, system_name, reference_energies,
                             num_levels_for_grid_search, x_min, x_max,
                             num_points_for_level_search,
-                            tolerance=1e-6, metric="max_abs", mass=1.0, hbar=1.0,
+                            tolerance=1e-6, metric="max_rel", mass=1.0, hbar=1.0,
                             grid_search_kwargs=None, level_search_kwargs=None):
     """
     Convenience wrapper: run both `find_minimum_grid_points` (search A,

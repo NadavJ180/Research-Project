@@ -275,6 +275,7 @@ def plot_classical_limit_comparison(T_arr, cv_classical_base, cv_classical_ref,
     ax_top.plot(T_arr, cv_classical_ref, color=ORANGE, linewidth=1.6,
                 linestyle=":", label="Classical limit \u2014 numerical reference")
     ax_top.set_ylabel(r"$C_v / k_B$", fontsize=12)
+    ax_top.set_ylim(0, 1.1)
     ax_top.set_xscale("log")
     ax_top.legend(fontsize=10, loc="upper left")
     ax_top.grid(True, linestyle="--", alpha=0.4)

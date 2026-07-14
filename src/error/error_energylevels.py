@@ -152,10 +152,10 @@ def plot_energy_level_comparison(E_numeric, E_analytic, error_result=None, zoom=
     else:
         fig, ax_main = plt.subplots(figsize=(7, 5))
 
-    fig.suptitle(f"{system_name} \u2014 Numerical (DVR) vs Analytic Energy Levels", fontsize=13, fontweight="bold")
+    fig.suptitle(f"{system_name} \n Numerical (DVR) vs Numerical Reference Energy Levels", fontsize=13, fontweight="bold")
 
     # --- Main (full-range) comparison ---
-    ax_main.plot(n, E_analytic, color=ORANGE, linewidth=2, label="Analytic $E_n$")
+    ax_main.plot(n, E_analytic, color=ORANGE, linewidth=2, label="Numerical Reference $E_n$")
     ax_main.plot(n, E_numeric, color=BLUE, linewidth=1.2, linestyle="--", marker=".", markersize=3, label="Numerical (DVR) $E_n$")
     ax_main.set_xlabel("State index  n", fontsize=11)
     ax_main.set_ylabel("$E_n$", fontsize=11)
@@ -210,16 +210,16 @@ def plot_energy_level_error(error_result, system_name="Harmonic Oscillator"):
 
     BLUE, RED = "#1f77b4", "#d62728"
     fig, ax = plt.subplots(figsize=(8, 5))
-    fig.suptitle(f"{system_name} \u2014 DVR Energy-Level Error vs State Index", fontsize=13, fontweight="bold")
+    fig.suptitle(f"{system_name} \n DVR Energy-Level Error vs State Index", fontsize=13, fontweight="bold")
 
 
-    ax.plot(n, rel_error, color=RED, linewidth=1.2, linestyle="--", label="Relative error")
+    ax.plot(n, rel_error, color=RED, linewidth=1.2, linestyle="--", label="Relative error ($(err_num - err_ref)/err_ref$)")
     ax.set_ylabel("Relative error", fontsize=11, color=RED)
     ax.set_yscale("log")
     ax.tick_params(axis="y", colors=RED)
     
     ax.set_xlabel("State index  n", fontsize=11)
-    ax.grid(which='major',linestyle='-', linewidth=0.8, alpha=0.7)
+    ax.grid(which='major',linestyle=':', linewidth=0.8, alpha=0.7)
     ax.grid(which='minor', linestyle=':', linewidth=0.5, alpha=0.5)
     ax.legend(fontsize=9, loc="upper left")
 
