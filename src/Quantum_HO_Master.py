@@ -1,39 +1,47 @@
 """
-Quantum_HO_Master_1_3.py
+Quantum_HO_Master_1_5.py
 =====================================================================
 WHAT THIS FILE DOES
 ---------------------------------------------------------------------
-Single entry-point driver for the Harmonic Oscillator benchmark.
-This file does NOT define any new physics or numerics itself -- it
-only imports and calls functions from the other project files, in
-clearly separated sections, so each piece can keep evolving
-independently without this file needing structural changes:
+Fully numerical entry-point driver for the Harmonic Oscillator
+(or any smooth potential). No analytical solutions, formulas, or
+closed-form references are used anywhere in this file or in the
+modules it calls. The only ground truth is a second, higher-quality
+DVR computation on a finer/wider grid.
 
-    SECTION 0 -- Global configuration (parameters live here)
-    SECTION 1 -- DVR setup & diagonalization      (DVR_Algorithm_1_4)
-    SECTION 2 -- Analytic HO energy levels         (HO_Analytical_1_0)
-    SECTION 3 -- Energy-level accuracy check       (HO_Energy_Level_Error_1_1)
-    SECTION 4 -- General Cv pipeline (numerical)   (Quantum_Classical_Combined_1_9)
-    SECTION 5 -- Numerical vs analytical benchmark (HO_Benchmark_1_1)
-    SECTION 6 -- DVR limit analysis                (DVR_Limit_Finder_1_2)
+    SECTION 0 -- Configuration            (all parameters here)
+    SECTION 1 -- DVR base computation     (DVR_Algorithm_1_4)
+    SECTION 2 -- Numerical reference      (DVR_Reference_Generator_1_0)
+    SECTION 3 -- Energy-level accuracy    (HO_Energy_Level_Error_1_1)
+                 base DVR vs reference DVR, level by level
+    SECTION 4 -- Cv pipeline              (Quantum_Classical_Combined_1_9)
+                 quantum Cv(T) + numerical classical limit on base energies
+    SECTION 5 -- DVR limit analysis       (DVR_Limit_Finder_1_2)
+                 minimum dx and maximum n, both checked vs reference
+    SECTION 6 -- Cv numerical benchmark   (Cv_Numerical_Benchmark_1_0)
+                 quantum Cv and classical limit: base vs reference
 
-CHANGELOG (v1.2 -> v1.3)
+GENERALITY
 ---------------------------------------------------------------------
-- Added SimpleTimer: a lightweight daemon thread that prints elapsed
-  time every 10 s so it is clear the code has not crashed during the
-  long DVR solve (Section 1) and Cv T-range sweep (Section 4). Uses
-  threading rather than multiprocessing -- zero process-spawn
-  overhead. May occasionally miss a tick if LAPACK holds the GIL for
-  longer than 10 s, but that is acceptable for a pure alive-indicator.
-- Updated imports: DVR_Algorithm_1_4 (timer removed from DVR),
-  DVR_Limit_Finder_1_2 (annotation removed from dx plot),
-  HO_Benchmark_1_1 (Einstein label removed from Cv curves).
-- Updated master parameters per project calibration:
-    NUM_STATES = 500
-    BETA_MIN=0.1, BETA_MAX=50.0, N_BETA=500
-    XI_START=1.0, TOL_XI=5e-3, MIN_STABLE_XI=3, XI_MULT=1.1,
-    MAX_XI_STEPS=80
-    TOL_CV=1e-4, MIN_STABLE_N=3
+Every function called here accepts any smooth V(x). To run this
+pipeline on a different potential, change `my_potential` and the
+label strings in Section 0. Nothing else needs to change.
+
+CHANGELOG (v1.4 -> v1.5)
+---------------------------------------------------------------------
+- REMOVED all analytical sections: no HO_Analytical_1_0,
+  no HO_Benchmark_1_1, no analytic reference anywhere.
+- Numerical reference (formerly Section 7a) is now Section 2 so
+  it is generated once and shared by Sections 3, 5, and 6.
+- Section 3: energy-level comparison now uses numerical reference.
+- Section 4: Cv pipeline no longer overlays an analytic classical
+  limit curve (cv_analytic=None); the numerical classical limit
+  from the xi/n sweep is the only curve shown.
+- Section 5: DVR limit finder now uses the numerical reference as
+  ground truth (was analytic_energy_levels_HO).
+- Section 6: Cv numerical benchmark (quantum + classical limit)
+  is the sole benchmark; the analytic benchmark is gone.
+- XI_START remains 3.0 (set in v1.4).
 =====================================================================
 """
 
@@ -41,67 +49,41 @@ import threading
 import time
 import multiprocessing
 
-from DVR_Algorithm import auto_configure_dvr, get_fully_converged_energy_levels
-from HO_Analytical import analytic_energy_levels_HO, analytic_cv_HO_classical
-from HO_Energy_Level_Error import (
-    compute_energy_level_errors,
-    plot_energy_level_comparison,
-    plot_energy_level_error,
-    print_accuracy_summary,
-)
+from DVR_Algorithm              import auto_configure_dvr, get_fully_converged_energy_levels
+from HO_Energy_Level_Error      import (compute_energy_level_errors,
+                                           plot_energy_level_comparison,
+                                           plot_energy_level_error,
+                                           print_accuracy_summary)
 from Quantum_Classical_Combined import run as run_general_cv_pipeline
-from HO_Benchmark import run_ho_benchmark
-from DVR_Limit_Finder import run_dvr_limit_analysis
+from DVR_Limit_Finder           import run_dvr_limit_analysis
+from DVR_Reference_Generator    import generate_reference_energies
+from Cv_Numerical_Benchmark     import run_cv_numerical_benchmark
 
 
 # =====================================================================
-# Lightweight alive-indicator (replaces multiprocessing DisappearingTimer)
+# Lightweight alive-indicator (daemon thread, prints every interval s)
 # =====================================================================
 class SimpleTimer:
     """
     Daemon thread that prints elapsed time every `interval` seconds
-    to confirm the pipeline is still running.
-
-    Why a thread instead of a process?
-    The old DisappearingTimer (DVR_Algorithm ≤ 1.3) used a spawned
-    process to avoid GIL starvation from LAPACK. That was necessary
-    when the timer lived *inside* the DVR solver where it ran
-    concurrently with eigvalsh. Here the timer wraps an entire
-    pipeline section at the Master-file level, printing *between*
-    LAPACK calls rather than during them -- a simple daemon thread
-    with a 10 s sleep interval is sufficient and has negligible
-    overhead. Even if LAPACK holds the GIL past one tick, the thread
-    will print as soon as control returns, so at most one interval
-    is missed.
+    so it is obvious the pipeline is still running during long solves.
 
     Parameters
     ----------
-    label : str
-        Short description shown in each tick line.
-    interval : float, optional
-        Seconds between ticks (default 10).
-
-    Usage
-    -----
-    with SimpleTimer("Section 1: DVR solve"):
-        energies = get_fully_converged_energy_levels(...)
-    # prints "✓  [Section 1: DVR solve] done in 14.2s" on exit
+    label    : str   -- short description shown in each tick
+    interval : float -- seconds between ticks (default 10)
     """
-
     def __init__(self, label="Running", interval=10):
-        self.label = label
+        self.label    = label
         self.interval = interval
-        self._stop = threading.Event()
-        self._thread = None
-        self._start = None
+        self._stop    = threading.Event()
+        self._thread  = None
+        self._start   = None
 
     def _run(self):
-        """Thread target: print a tick line every `interval` seconds."""
-        tick = 0
         while not self._stop.wait(timeout=self.interval):
-            tick += 1
-            elapsed = time.time() - self._start
-            print(f"  \u23f1  [{self.label}] still running ... {elapsed:.0f}s", flush=True)
+            print(f"  \u23f1  [{self.label}] still running ... "
+                  f"{time.time()-self._start:.0f}s", flush=True)
 
     def __enter__(self):
         self._start = time.time()
@@ -114,150 +96,217 @@ class SimpleTimer:
         self._stop.set()
         if self._thread:
             self._thread.join(timeout=2.0)
-        elapsed = time.time() - self._start
-        print(f"  \u2713  [{self.label}] done in {elapsed:.1f}s", flush=True)
+        print(f"  \u2713  [{self.label}] done in "
+              f"{time.time()-self._start:.1f}s", flush=True)
 
 
-# =====================================================================
-# Entry point
 # =====================================================================
 if __name__ == "__main__":
-    # Required for safe multiprocessing on Windows/macOS (used by tqdm
-    # internals and any future multiprocessing calls).
     multiprocessing.freeze_support()
 
     # =================================================================
-    # SECTION 0 -- Global configuration
-    # Edit this section to change system parameters, temperature range,
-    # convergence tolerances, or the limit-analysis settings.
+    # SECTION 0 -- Configuration
+    # This is the ONLY section that needs editing when changing system,
+    # parameters, or reference scaling.
     # =================================================================
 
-    # --- Physical constants (dimensionless units: ℏ = m = ω = k_B = 1) ---
-    MASS, HBAR, OMEGA, KB = 1.0, 1.0, 1.0, 1.0
+    # --- Physical constants (dimensionless: ℏ = m = ω = k_B = 1) ---
+    MASS, HBAR, OMEGA = 1.0, 1.0, 1.0
 
-    # --- Number of DVR energy levels to compute ---
-    # 500 levels comfortably covers the hardest (β, ξ) combination in the
-    # sweep below: the n-convergence diagnostic will confirm exactly how
-    # many are actually needed, typically well below 500 for the HO.
-    # See the response note in the project changelog for why fewer levels
-    # are needed here than in earlier project iterations.
+    # --- Potential function (swap this for any smooth V(x)) ---
+    def my_potential(x):
+        """1-D harmonic oscillator: V(x) = ½ m ω² x²."""
+        return 0.5 * MASS * (OMEGA**2) * x**2
+
+    SYSTEM_NAME   = "1-D Harmonic Oscillator"
+    T_UNITS_LABEL = r"$k_B T \,/\, \hbar\omega$"
+
+    # --- DVR base grid: number of energy levels ---
+    # The n-convergence diagnostic (Section 4) will confirm the exact
+    # number needed; 500 gives comfortable headroom for this system.
     NUM_STATES = 500
 
-    # --- Temperature (β) sweep for the Cv pipeline ---
-    # β_max = 50 probes very cold temperatures (T = 0.02 in ℏω/k_B units).
-    # At such cold β the system is deep in the quantum ground state and
-    # the classical limit is not reachable -- the ξ-convergence scan will
-    # correctly report failure there, which is physically expected.
+    # --- Temperature sweep ---
     BETA_MIN, BETA_MAX, N_BETA = 0.1, 50.0, 500
 
-    # --- ξ / n convergence parameters ---
-    XI_START      = 3.0    # initial scaling factor for the ξ scan
-    TOL_XI        = 5e-3   # |ΔCv| plateau tolerance for ξ convergence
-    MIN_STABLE_XI = 3      # minimum consecutive stable steps in the ξ scan
-    XI_MULT       = 1.1    # geometric growth factor per ξ step
-    MAX_XI_STEPS  = 80     # safety cap on ξ scan length
-    TOL_CV        = 1e-4   # |ΔCv| tolerance for n convergence
-    MIN_STABLE_N  = 3      # minimum consecutive stable steps in the n scan
+    # --- xi / n convergence parameters ---
+    # XI_START = 3.0: first probe is already at effective T/9, allowing
+    # the classical-limit plateau to be found at much colder temperatures
+    # than XI_START = 1.0 would permit.
+    XI_START      = 3.0
+    TOL_XI        = 5e-3
+    MIN_STABLE_XI = 3
+    XI_MULT       = 1.1
+    MAX_XI_STEPS  = 80
+    TOL_CV        = 1e-4
+    MIN_STABLE_N  = 3
 
-    # --- DVR limit analysis tolerance ---
+    # --- DVR limit analysis tolerance (Section 5) ---
     LIMIT_TOLERANCE = 1e-6
 
-    # --- The Harmonic Oscillator potential ---
-    def ho_potential(x):
-        """V(x) = ½ m ω² x²  (smooth, finite everywhere -- suitable for this DVR engine)."""
-        return 0.5 * MASS * (OMEGA ** 2) * x ** 2
+    # --- Numerical reference scaling (Sections 2, 3, 5, 6) ---
+    # REFERENCE_SPAN_FACTOR: multiply base span by this (2.0 = double L)
+    # REFERENCE_DX_FACTOR:   divide base dx   by this (2.0 = halve Δx)
+    # Set INTERACTIVE = True to be prompted at runtime instead.
+    INTERACTIVE_REFERENCE_SCALING = False
+    REFERENCE_SPAN_FACTOR         = 2.0
+    REFERENCE_DX_FACTOR           = 2.0
+
+    # Human-readable label built from the scaling factors (used in plots).
+    ref_label = (f"numerical reference  "
+                 f"(span\u00d7{REFERENCE_SPAN_FACTOR:.2g}, "
+                 f"dx\u00f7{REFERENCE_DX_FACTOR:.2g})")
 
     # =================================================================
-    # SECTION 1 -- DVR: auto-configure grid and compute energy levels
+    # SECTION 1 -- DVR base computation
+    # Auto-configure a grid for NUM_STATES levels, run the 3-pass
+    # convergence-checked solve, return the base energy spectrum.
     # =================================================================
-    print("\n" + "=" * 60)
-    print("  SECTION 1: DVR energy levels")
-    print("=" * 60)
+    print("\n" + "="*60)
+    print(f"  SECTION 1 — DVR base computation  ({SYSTEM_NAME})")
+    print("="*60)
+
     x_min, x_max, n_grid = auto_configure_dvr(
-        ho_potential, NUM_STATES, mass=MASS, hbar=HBAR
+        my_potential, NUM_STATES, mass=MASS, hbar=HBAR
     )
+
     with SimpleTimer("Section 1: DVR 3-pass convergence check"):
-        energies_numeric = get_fully_converged_energy_levels(
-            potential_func=ho_potential, num_levels=NUM_STATES,
+        energies_base = get_fully_converged_energy_levels(
+            potential_func=my_potential,
+            num_levels=NUM_STATES,
             x_min=x_min, x_max=x_max, num_points=n_grid,
             mass=MASS, hbar=HBAR,
         )
 
     # =================================================================
-    # SECTION 2 -- Analytic HO energy levels (exact ground truth)
+    # SECTION 2 -- Numerical reference generation
+    # Run the DVR on a finer/wider grid to produce the high-precision
+    # reference spectrum used as ground truth throughout Sections 3-6.
+    # The reference is computed ONCE here and reused everywhere.
+    #
+    # NOTE on level count for Section 5 (DVR limit analysis):
+    # The level-count search can test up to min(n_grid-2, NUM_STATES)
+    # levels. If you want to probe beyond NUM_STATES in the limit search,
+    # increase NUM_STATES or generate a separate reference with more
+    # levels specifically for Section 5.
     # =================================================================
-    # E_n = ℏω(n + ½),  n = 0, 1, ..., NUM_STATES-1
-    energies_analytic = analytic_energy_levels_HO(NUM_STATES, hbar=HBAR, omega=OMEGA)
+    print("\n" + "="*60)
+    print("  SECTION 2 — Numerical reference generation")
+    print("="*60)
+
+    with SimpleTimer("Section 2: reference DVR solve"):
+        reference_result = generate_reference_energies(
+            my_potential, NUM_STATES,
+            x_min, x_max, n_grid,
+            span_factor=REFERENCE_SPAN_FACTOR,
+            dx_factor=REFERENCE_DX_FACTOR,
+            mass=MASS, hbar=HBAR,
+            interactive=INTERACTIVE_REFERENCE_SCALING,
+            verbose=True,
+        )
+
+    energies_ref = reference_result["energies"]
 
     # =================================================================
-    # SECTION 3 -- Energy-level accuracy: DVR vs analytic, level by level
+    # SECTION 3 -- Energy-level accuracy: base DVR vs numerical reference
+    # Compares the two spectra level-by-level and plots the error.
+    # Uses the generic functions from HO_Energy_Level_Error_1_1 which
+    # only ever compare two plain arrays -- no system-specific logic.
     # =================================================================
-    print("\n" + "=" * 60)
-    print("  SECTION 3: Energy-level accuracy check")
-    print("=" * 60)
-    energy_error = compute_energy_level_errors(energies_numeric, energies_analytic)
-    print_accuracy_summary(energy_error, NUM_STATES, system_name="Harmonic Oscillator")
+    print("\n" + "="*60)
+    print("  SECTION 3 — Energy-level accuracy (base DVR vs reference)")
+    print("="*60)
+
+    energy_error = compute_energy_level_errors(
+        energies_base,
+        energies_ref[:NUM_STATES],
+    )
+    print_accuracy_summary(
+        energy_error, NUM_STATES,
+        system_name=f"{SYSTEM_NAME}  [{ref_label}]",
+    )
     # Plot 1: full spectrum + zoom on worst-error state
     plot_energy_level_comparison(
-        energies_numeric, energies_analytic,
+        energies_base, energies_ref[:NUM_STATES],
         error_result=energy_error, zoom=True,
-        system_name="Harmonic Oscillator",
+        system_name=f"{SYSTEM_NAME} — base DVR vs {ref_label}",
     )
     # Plot 2: absolute and relative error vs state index n (log y-axis)
-    plot_energy_level_error(energy_error, system_name="Harmonic Oscillator")
+    plot_energy_level_error(
+        energy_error,
+        system_name=f"{SYSTEM_NAME} — base DVR vs {ref_label}",
+    )
 
     # =================================================================
-    # SECTION 4 -- General Cv pipeline: quantum Cv(T) + numerical
-    #              classical limit + ξ/n convergence diagnostics
+    # SECTION 4 -- Cv pipeline
+    # Computes quantum Cv(T) directly from the base energy spectrum,
+    # and finds the numerical classical-limit Cv(T) via the xi/n
+    # convergence sweep. Produces xi-convergence diagnostic,
+    # n-convergence diagnostic, and the combined Cv(T) summary plot.
+    # cv_analytic=None: no analytic overlay; only the numerical curves.
     # =================================================================
-    print("\n" + "=" * 60)
-    print("  SECTION 4: Cv(T) pipeline")
-    print("=" * 60)
+    print("\n" + "="*60)
+    print("  SECTION 4 — Cv pipeline (base DVR energies)")
+    print("="*60)
+
     with SimpleTimer("Section 4: Cv T-range sweep"):
-        numeric_results = run_general_cv_pipeline(
-            energies=energies_numeric,
-            system_name="1-D Harmonic Oscillator",
+        base_cv_results = run_general_cv_pipeline(
+            energies=energies_base,
+            system_name=SYSTEM_NAME,
             beta_min=BETA_MIN, beta_max=BETA_MAX, n_beta=N_BETA,
             xi_start=XI_START, tol_xi=TOL_XI,
             min_stable_xi=MIN_STABLE_XI,
             xi_multiplier=XI_MULT, max_xi_steps=MAX_XI_STEPS,
             tol_cv=TOL_CV, min_stable_n=MIN_STABLE_N,
-            cv_analytic=analytic_cv_HO_classical(kB=KB),
-            T_units_label=r"$k_B T / \hbar\omega$",
+            cv_analytic=None,          # no analytic overlay
+            T_units_label=T_UNITS_LABEL,
         )
 
     # =================================================================
-    # SECTION 5 -- HO benchmark: numerical vs analytical Cv(T) overlay
-    #              with a quantitative error curve
+    # SECTION 5 -- DVR limit analysis (numerical reference as truth)
+    # Search A: sweep dx at fixed n → maximum safe Δx for NUM_STATES levels
+    # Search B: sweep n at fixed grid → maximum trustworthy n for this Δx
+    # Both searches compare against the numerical reference (Section 2).
     # =================================================================
-    print("\n" + "=" * 60)
-    print("  SECTION 5: Numerical vs analytical benchmark")
-    print("=" * 60)
-    benchmark_results = run_ho_benchmark(
-        numeric_results, hbar=HBAR, omega=OMEGA, kB=KB
-    )
+    print("\n" + "="*60)
+    print("  SECTION 5 — DVR limit analysis (vs numerical reference)")
+    print("="*60)
 
-    # =================================================================
-    # SECTION 6 -- DVR limit analysis: where does accuracy break down?
-    #   Search A (dx sweep): minimum grid spacing for NUM_STATES levels
-    #   Search B (n sweep):  maximum trustworthy n for the same grid
-    # The reference spectrum here is HO_Analytical's exact energies.
-    # For a future system with no analytic solution, replace this with
-    # a separately verified, much finer numerical DVR run.
-    # =================================================================
-    print("\n" + "=" * 60)
-    print("  SECTION 6: DVR limit analysis")
-    print("=" * 60)
-    reference_for_limits = analytic_energy_levels_HO(n_grid, hbar=HBAR, omega=OMEGA)
-    with SimpleTimer("Section 6: DVR limit searches"):
+    with SimpleTimer("Section 5: DVR limit searches"):
         limit_results = run_dvr_limit_analysis(
-            potential_func=ho_potential,
-            system_name="1-D Harmonic Oscillator",
-            reference_energies=reference_for_limits,
+            potential_func=my_potential,
+            system_name=SYSTEM_NAME,
+            reference_energies=energies_ref,
             num_levels_for_grid_search=NUM_STATES,
             x_min=x_min, x_max=x_max,
             num_points_for_level_search=n_grid,
             tolerance=LIMIT_TOLERANCE,
             metric="max_abs",
             mass=MASS, hbar=HBAR,
+        )
+
+    # =================================================================
+    # SECTION 6 -- Cv numerical benchmark
+    # Runs the FULL Cv pipeline (quantum Cv + classical limit sweep)
+    # on the reference energies, then compares both curves against
+    # the base results from Section 4. Produces:
+    #   Figure 1: quantum Cv(T) base vs reference + error panel
+    #   Figure 2: classical limit Cv(T) base vs reference + error panel
+    # =================================================================
+    print("\n" + "="*60)
+    print("  SECTION 6 — Cv numerical benchmark (base vs reference)")
+    print("="*60)
+
+    with SimpleTimer("Section 6: reference Cv sweep"):
+        cv_benchmark_results = run_cv_numerical_benchmark(
+            base_cv_results=base_cv_results,
+            reference_energies=energies_ref,
+            beta_arr=base_cv_results["beta_arr"],
+            system_name=SYSTEM_NAME,
+            reference_label=ref_label,
+            xi_start=XI_START, tol_xi=TOL_XI,
+            min_stable_xi=MIN_STABLE_XI,
+            xi_multiplier=XI_MULT, max_xi_steps=MAX_XI_STEPS,
+            tol_cv=TOL_CV, min_stable_n=MIN_STABLE_N,
+            T_units_label=T_UNITS_LABEL,
         )
