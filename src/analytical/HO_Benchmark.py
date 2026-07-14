@@ -25,7 +25,7 @@ CHANGELOG (v1.0 -> v1.1)
 import numpy as np
 import matplotlib.pyplot as plt
 
-from HO_Analytical import analytic_cv_HO_quantum, analytic_cv_HO_classical
+from analytical.HO_Analytical import analytic_cv_HO_quantum, analytic_cv_HO_classical
 
 
 # =====================================================================

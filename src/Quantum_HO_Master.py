@@ -49,14 +49,14 @@ import threading
 import time
 import multiprocessing
 
-from DVR_Algorithm              import auto_configure_dvr, get_fully_converged_energy_levels
-from HO_Energy_Level_Error      import (compute_energy_level_errors,
+from DVR.DVR_Algorithm              import auto_configure_dvr, get_fully_converged_energy_levels
+from error.error_energylevels      import (compute_energy_level_errors,
                                            plot_energy_level_comparison,
                                            plot_energy_level_error,
                                            print_accuracy_summary)
 from Quantum_Classical_Combined import run as run_general_cv_pipeline
-from DVR_Limit_Finder           import run_dvr_limit_analysis
-from DVR_Reference_Generator    import generate_reference_energies
+from DVR.DVR_Limit_Finder           import run_dvr_limit_analysis
+from DVR.DVR_Reference_Generator    import generate_reference_energies
 from Cv_Numerical_Benchmark     import run_cv_numerical_benchmark
 
 
@@ -210,7 +210,7 @@ if __name__ == "__main__":
     # =================================================================
     # SECTION 3 -- Energy-level accuracy: base DVR vs numerical reference
     # Compares the two spectra level-by-level and plots the error.
-    # Uses the generic functions from HO_Energy_Level_Error_1_1 which
+    # Uses the generic functions from Energy_Level_Error which
     # only ever compare two plain arrays -- no system-specific logic.
     # =================================================================
     print("\n" + "="*60)
@@ -229,7 +229,7 @@ if __name__ == "__main__":
     plot_energy_level_comparison(
         energies_base, energies_ref[:NUM_STATES],
         error_result=energy_error, zoom=True,
-        system_name=f"{SYSTEM_NAME} — base DVR vs {ref_label}",
+        system_name=f"{SYSTEM_NAME} [{ref_label}]",
     )
     # Plot 2: absolute and relative error vs state index n (log y-axis)
     plot_energy_level_error(

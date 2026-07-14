@@ -1,5 +1,5 @@
 """
-HO_Energy_Level_Error_1_1.py
+
 =====================================================================
 WHAT THIS FILE DOES
 ---------------------------------------------------------------------
@@ -206,28 +206,22 @@ def plot_energy_level_error(error_result, system_name="Harmonic Oscillator"):
     """
     abs_error = error_result["abs_error"]
     rel_error = error_result["rel_error"]
-    n = np.arange(len(abs_error))
+    n = np.arange(len(rel_error))
 
     BLUE, RED = "#1f77b4", "#d62728"
-    fig, ax1 = plt.subplots(figsize=(8, 5))
+    fig, ax = plt.subplots(figsize=(8, 5))
     fig.suptitle(f"{system_name} \u2014 DVR Energy-Level Error vs State Index", fontsize=13, fontweight="bold")
 
-    ax1.plot(n, abs_error, color=BLUE, linewidth=1.5, label="Absolute error  $|E_n^{num} - E_n^{analytic}|$")
-    ax1.set_xlabel("State index  n", fontsize=11)
-    ax1.set_ylabel("Absolute error", fontsize=11, color=BLUE)
-    ax1.set_yscale("log")
-    ax1.tick_params(axis="y", colors=BLUE)
-    ax1.grid(True, linestyle="--", alpha=0.4)
 
-    ax2 = ax1.twinx()
-    ax2.plot(n, rel_error, color=RED, linewidth=1.2, linestyle="--", label="Relative error")
-    ax2.set_ylabel("Relative error", fontsize=11, color=RED)
-    ax2.set_yscale("log")
-    ax2.tick_params(axis="y", colors=RED)
-
-    lines1, labels1 = ax1.get_legend_handles_labels()
-    lines2, labels2 = ax2.get_legend_handles_labels()
-    ax1.legend(lines1 + lines2, labels1 + labels2, fontsize=9, loc="upper left")
+    ax.plot(n, rel_error, color=RED, linewidth=1.2, linestyle="--", label="Relative error")
+    ax.set_ylabel("Relative error", fontsize=11, color=RED)
+    ax.set_yscale("log")
+    ax.tick_params(axis="y", colors=RED)
+    
+    ax.set_xlabel("State index  n", fontsize=11)
+    ax.grid(which='major',linestyle='-', linewidth=0.8, alpha=0.7)
+    ax.grid(which='minor', linestyle=':', linewidth=0.5, alpha=0.5)
+    ax.legend(fontsize=9, loc="upper left")
 
     plt.tight_layout()
     plt.show()
