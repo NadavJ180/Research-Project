@@ -47,8 +47,8 @@ CHANGELOG (NEW FILE, v1.0)
 import numpy as np
 import matplotlib.pyplot as plt
 
-from Classical_Limit_Numerical_1_0 import sweep_temperature_range
-from Quantum_Classical_Combined_1_9 import compute_quantum_heat_capacity_curve
+from Classical_Limit_Numerical import sweep_temperature_range
+from Quantum_Classical_Combined import compute_quantum_heat_capacity_curve
 
 
 # =====================================================================

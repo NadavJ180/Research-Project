@@ -45,7 +45,7 @@ CHANGELOG (NEW FILE, v1.0)
 
 import time
 import numpy as np
-from DVR_Algorithm_1_4 import colbert_miller_dvr_1d
+from DVR_Algorithm import colbert_miller_dvr_1d
 
 
 # =====================================================================
