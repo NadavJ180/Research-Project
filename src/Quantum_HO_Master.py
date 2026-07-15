@@ -124,7 +124,7 @@ if __name__ == "__main__":
     # --- DVR base grid: number of energy levels ---
     # The n-convergence diagnostic (Section 4) will confirm the exact
     # number needed; 500 gives comfortable headroom for this system.
-    NUM_STATES = 500
+    NUM_STATES = 2500
 
     # --- Temperature sweep ---
     BETA_MIN, BETA_MAX, N_BETA = 0.1, 50.0, 500
