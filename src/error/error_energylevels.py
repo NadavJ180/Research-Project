@@ -213,7 +213,7 @@ def plot_energy_level_error(error_result, system_name="Harmonic Oscillator"):
     fig.suptitle(f"{system_name} \n DVR Energy-Level Error vs State Index", fontsize=13, fontweight="bold")
 
 
-    ax.plot(n, rel_error, color=RED, linewidth=1.2, linestyle="--", label="Relative error ($(err_num - err_ref)/err_ref$)")
+    ax.plot(n, rel_error, color=RED, linewidth=1.2, linestyle="--", label=fr"Relative error ($(err_{{num}} - err_{{ref}})/err_{{ref}}$)")
     ax.set_ylabel("Relative error", fontsize=11, color=RED)
     ax.set_yscale("log")
     ax.tick_params(axis="y", colors=RED)
