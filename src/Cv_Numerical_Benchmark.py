@@ -1,5 +1,5 @@
 """
-Cv_Numerical_Benchmark_1_1.py
+Cv_Numerical_Benchmark_1_2.py
 =====================================================================
 WHAT THIS FILE DOES
 ---------------------------------------------------------------------
@@ -10,69 +10,47 @@ by DVR_Reference_Generator_1_0.py). Produces two two-panel figures:
 
     Figure 1 -- Quantum Cv(T):
         top:    base-DVR Cv(T) vs reference Cv(T) on the same axes
-        bottom: |Cv_base - Cv_ref| / |Cv_ref| vs T  (relative error,
-                log y-axis)
+        bottom: |Cv_base - Cv_ref| vs T  (ABSOLUTE error, log y-axis)
 
     Figure 2 -- Classical limit Cv(T):
         top:    base classical limit vs reference classical limit
-        bottom: |Cv_base - Cv_ref| / |Cv_ref| vs T  (relative error,
+        bottom: |Cv_base - Cv_ref| / |Cv_ref| vs T  (RELATIVE error,
                 log y-axis, only where both base AND reference converged)
 
-This file is SYSTEM-AGNOSTIC. It has no knowledge of the HO or any
-other specific potential. All it needs are two pre-computed sets of
-Cv curves (base and reference) and the shared temperature axis. The
-reference Cv is computed internally using the same xi/n-convergence
-engine (Classical_Limit_Numerical, Quantum_Classical_Combined) that
-the base pipeline uses -- the only difference is the input energy
-spectrum.
-
-WHY THIS IS USEFUL FOR GENERAL SYSTEMS
+WHICH ERROR METRIC AND WHY
 ---------------------------------------------------------------------
-For systems with no analytic solution you cannot compare against a
-known formula. Instead you compare the base result against a more
-expensive (finer/wider) DVR computation. If the two agree to your
-tolerance, the base result is self-consistently converged. This is
-the same convergence philosophy used in the DVR limit finder, now
-extended from energy levels alone to the thermodynamic observables
-(Cv) that are the final physical output.
+QUANTUM Cv (Figure 1 bottom) -- ABSOLUTE ERROR:
+    Relative error |ΔCv / Cv_ref| diverges to infinity at cold T
+    because Cv → 0 exponentially (only the ground state is occupied).
+    Both the base and reference give essentially zero, so their ratio
+    is numerically ill-defined. Absolute error |ΔCv| remains finite
+    and meaningful: it tells you directly how large the discrepancy
+    is in the same units as Cv itself (k_B).
 
-WHY RELATIVE ERROR ON THE BOTTOM PANELS
+CLASSICAL LIMIT Cv (Figure 2 bottom) -- RELATIVE ERROR:
+    The classical limit is only reported where the xi-scan converged,
+    which happens in the temperature range where Cv is appreciably
+    close to k_B (the classical plateau). Cv_ref is never near zero
+    in this region, so relative error is well-defined and is the
+    better metric: it normalises the comparison to the scale of the
+    quantity being measured.
+
+CHANGELOG (v1.1 -> v1.2)
 ---------------------------------------------------------------------
-Cv(T) varies by many orders of magnitude across the temperature range:
-it is nearly zero at very cold T (only the ground state occupied) and
-approaches k_B at high T (classical regime). An absolute error panel
-would be dominated by the high-T region simply because Cv is large
-there, obscuring whether the low-T region -- where the quantum-to-
-classical transition is most sensitive -- is also accurately converged.
+- QUANTUM Cv ERROR PANEL reverted from relative to ABSOLUTE error.
+  Relative error diverges as Cv → 0 at low T (dividing ~0 by ~0),
+  producing spurious infinite errors that obscure the actual accuracy
+  of the DVR calculation. Absolute error is well-defined everywhere.
 
-Relative error |ΔCv / Cv_ref| is dimensionless and compares the
-error as a fraction of the actual value at each temperature. This
-gives a fair, temperature-independent measure of convergence quality:
-a flat, horizontal floor in relative error means the base DVR is
-uniformly accurate across the entire temperature range, not just in
-the region where Cv is large.
+- CLASSICAL LIMIT ERROR PANEL keeps relative error from v1.1. The
+  classical limit is always reported near k_B ≠ 0 (only where the
+  xi-scan converged), so relative error is meaningful there.
 
-CHANGELOG (v1.0 -> v1.1)
----------------------------------------------------------------------
-- ERROR PANELS CHANGED FROM ABSOLUTE TO RELATIVE ERROR throughout.
-  Both plot functions (`plot_quantum_cv_comparison` and
-  `plot_classical_limit_comparison`) now plot
-  |Cv_base - Cv_ref| / |Cv_ref| on the bottom panel instead of
-  |Cv_base - Cv_ref|.
+- `print_cv_benchmark_summary` now prints absolute error for quantum
+  Cv and relative error for classical limit, matching the plots.
 
-- `compute_cv_comparison_error` extended: previously only returned
-  max_abs / mean_abs / max_abs_idx. Now also returns max_rel,
-  mean_rel, and max_rel_idx so callers can use either metric.
-  Both abs and rel arrays are still stored in the returned dict.
-
-- `print_cv_benchmark_summary` updated to print relative error
-  (mean |ΔCv/Cv_ref| and max |ΔCv/Cv_ref|) instead of absolute
-  error, matching what the plots now show.
-
-- Y-axis labels on both error panels updated to show
-  |Cv_base - Cv_ref| / |Cv_ref|  (relative error, dimensionless).
-
-- All docstrings updated to reflect the above changes.
+- Module docstring updated to explain why each panel uses a
+  different metric.
 =====================================================================
 """
 
@@ -215,15 +193,17 @@ def plot_quantum_cv_comparison(T_arr, cv_base, cv_ref, error_result,
     Two-panel comparison of quantum Cv(T): base DVR vs numerical reference.
 
     Top panel:    both Cv(T) curves on the same log-T axes.
-    Bottom panel: relative error |Cv_base - Cv_ref| / |Cv_ref| vs T
-                  (log y-axis). The temperature of maximum relative
-                  error is marked with a scatter point.
+    Bottom panel: ABSOLUTE error |Cv_base - Cv_ref| vs T (log y-axis).
+                  The temperature of maximum absolute error is marked.
 
-    WHY RELATIVE ERROR: Cv(T) spans many orders of magnitude from near
-    zero at cold T to k_B at high T. An absolute-error bottom panel is
-    dominated by the high-T region simply because Cv is larger there.
-    Relative error normalises this out, giving a temperature-independent
-    measure of convergence quality across the whole range.
+    WHY ABSOLUTE ERROR HERE:
+    Quantum Cv(T) → 0 exponentially at low T (only the ground state
+    is occupied). At these temperatures both the base and reference
+    give essentially zero, so their ratio is numerically ill-defined
+    (dividing ~0 by ~0 produces spurious large or infinite relative
+    errors even when the DVR is perfectly accurate). Absolute error
+    |ΔCv| stays finite everywhere and is directly interpretable in
+    units of k_B.
 
     Parameters
     ----------
@@ -233,7 +213,7 @@ def plot_quantum_cv_comparison(T_arr, cv_base, cv_ref, error_result,
         Quantum Cv(T) from the base DVR and the reference DVR.
     error_result : dict
         Output of `compute_cv_comparison_error`. The bottom panel uses
-        the "rel_error", "max_rel", and "max_rel_idx" keys.
+        the "abs_error", "max_abs", and "max_abs_idx" keys.
     system_name : str
         Used in the figure title.
     reference_label : str
@@ -260,24 +240,22 @@ def plot_quantum_cv_comparison(T_arr, cv_base, cv_ref, error_result,
     ax_top.plot(T_arr, cv_base, color=BLUE, linewidth=2.0,
                 label="Quantum Cv(T) \u2014 base DVR")
     ax_top.plot(T_arr, cv_ref, color=ORANGE, linewidth=1.6, linestyle="--",
-                label=f"Quantum Cv(T) \u2014 numerical reference")
+                label="Quantum Cv(T) \u2014 numerical reference")
     ax_top.set_ylabel(r"$C_v / k_B$", fontsize=12)
     ax_top.set_xscale("log")
     ax_top.legend(fontsize=10, loc="upper left")
     ax_top.grid(True, linestyle="--", alpha=0.4)
 
-    # --- Bottom panel: relative error ---
-    ax_bot.plot(T_arr, error_result["rel_error"], color=BLUE, linewidth=1.5)
-    idx = error_result["max_rel_idx"]
-    if idx >= 0 and not np.isnan(error_result["max_rel"]):
-        ax_bot.scatter([T_arr[idx]], [error_result["max_rel"]],
+    # --- Bottom panel: ABSOLUTE error ---
+    ax_bot.plot(T_arr, error_result["abs_error"], color=BLUE, linewidth=1.5)
+    idx = error_result["max_abs_idx"]
+    if idx >= 0 and not np.isnan(error_result["max_abs"]):
+        ax_bot.scatter([T_arr[idx]], [error_result["max_abs"]],
                         color=RED, zorder=5, s=60,
-                        label=f"Max rel. error = {error_result['max_rel']:.2e}")
+                        label=f"Max abs. error = {error_result['max_abs']:.2e}")
         ax_bot.legend(fontsize=9, loc="upper right")
     ax_bot.set_xlabel(T_units_label, fontsize=12)
-    ax_bot.set_ylabel(
-        r"$|Cv_{\rm base} - Cv_{\rm ref}|\,/\,|Cv_{\rm ref}|$", fontsize=11
-    )
+    ax_bot.set_ylabel(r"$|Cv_{\rm base} - Cv_{\rm ref}|$", fontsize=11)
     ax_bot.set_yscale("log")
     ax_bot.grid(True, linestyle="--", alpha=0.4)
     plt.tight_layout()
@@ -386,21 +364,17 @@ def plot_classical_limit_comparison(T_arr, cv_classical_base, cv_classical_ref,
 # =====================================================================
 def print_cv_benchmark_summary(quantum_err, classical_err, system_name, reference_label):
     """
-    Print a concise numerical summary of base vs reference Cv errors
-    to the console, reporting relative error to match the error panels
-    in the benchmark plots.
-
-    Both mean and max relative error are reported for each quantity.
-    Absolute error values are available in the error dicts but are not
-    printed here as they are less informative across a wide temperature
-    range (see module docstring for rationale).
+    Print a concise numerical summary of base vs reference Cv errors,
+    using the same error metric as the corresponding plot:
+        - Quantum Cv:        ABSOLUTE error |ΔCv|  (matches Figure 1)
+        - Classical limit:   RELATIVE error |ΔCv/Cv_ref|  (matches Figure 2)
 
     Parameters
     ----------
     quantum_err, classical_err : dict
-        Outputs of `compute_cv_comparison_error` for quantum Cv and
-        classical limit respectively. Must contain "max_rel",
-        "mean_rel", and "max_rel_idx" keys (present in v1.1+).
+        Outputs of `compute_cv_comparison_error`. Must contain
+        "max_abs", "mean_abs" (for quantum) and "max_rel", "mean_rel"
+        (for classical).
     system_name : str
     reference_label : str
 
@@ -412,9 +386,9 @@ def print_cv_benchmark_summary(quantum_err, classical_err, system_name, referenc
     print(f"  {system_name}: Cv numerical benchmark")
     print(f"  Reference: {reference_label}")
     print(f"{'-'*60}")
-    print(f"  Quantum Cv(T)  [relative error |ΔCv/Cv_ref|]:")
-    print(f"    mean = {quantum_err['mean_rel']:.3e}")
-    print(f"    max  = {quantum_err['max_rel']:.3e}")
+    print(f"  Quantum Cv(T)  [absolute error |ΔCv|]:")
+    print(f"    mean = {quantum_err['mean_abs']:.3e}")
+    print(f"    max  = {quantum_err['max_abs']:.3e}")
     print(f"  Classical limit Cv(T)  [relative error |ΔCv/Cv_ref|]:")
     print(f"    mean = {classical_err['mean_rel']:.3e}")
     print(f"    max  = {classical_err['max_rel']:.3e}")
@@ -441,9 +415,10 @@ def run_cv_numerical_benchmark(base_cv_results, reference_energies, beta_arr,
         4. Produce Figure 1 (quantum Cv, relative error bottom panel) and
            Figure 2 (classical limit, relative error bottom panel).
 
-    The bottom panels of both figures show RELATIVE error
-    |Cv_base - Cv_ref| / |Cv_ref|, not absolute error. See the module
-    docstring for the rationale.
+    The bottom panels use DIFFERENT metrics for each figure:
+        Figure 1 (quantum Cv):     absolute error |Cv_base - Cv_ref|
+        Figure 2 (classical limit): relative error |Cv_base - Cv_ref| / |Cv_ref|
+    See the module docstring for the rationale.
 
     Parameters
     ----------

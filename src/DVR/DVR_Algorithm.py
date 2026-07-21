@@ -50,7 +50,7 @@ import time
 # =====================================================================
 # Automatic grid configuration (SMOOTH potentials only)
 # =====================================================================
-def auto_configure_dvr(potential_func, num_levels, mass=1.0, hbar=1.0, x0_guess=0.0):
+def auto_configure_dvr(potential_func, num_levels, mass=1.0, hbar=1.0, x0_guess=1.0):
     """
     Automatically pick a grid window [x_min, x_max] and a grid point
     count for a SMOOTH potential well, given how many energy levels
@@ -104,7 +104,7 @@ def auto_configure_dvr(potential_func, num_levels, mass=1.0, hbar=1.0, x0_guess=
     v_min = res.fun
 
     # Step 2: pick an energy ceiling that comfortably covers num_levels states.
-    E_ceiling = v_min + (1.5 * num_levels)
+    E_ceiling = v_min + (10.0 * num_levels)         # OG HO -> 2.0 * num_levels
     root_func = lambda x: potential_func(x) - E_ceiling
 
     try:

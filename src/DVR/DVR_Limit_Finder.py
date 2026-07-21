@@ -1,69 +1,57 @@
 """
-DVR_Limit_Finder_1_3.py
+DVR_Limit_Finder_1_4.py
 =====================================================================
 WHAT THIS FILE DOES
 ---------------------------------------------------------------------
 General-purpose (system-agnostic) tool for mapping out WHERE the
-smooth-potential DVR solver (DVR_Algorithm_1_3.py) stops being
-trustworthy, by comparing its output against a reference spectrum and
-searching for the breakdown point in two complementary directions:
+smooth-potential DVR solver stops being trustworthy, by comparing
+its output against a reference spectrum and searching for the
+breakdown point in two complementary directions:
 
     (A) RESOLUTION LIMIT -- fix the number of energy levels n and the
         spatial span, then coarsen the grid (increase dx) until the
         error vs reference exceeds a tolerance. Finds the maximum
-        grid spacing dx still trustworthy for n levels. The search
-        and plot use dx directly because dx has a concrete physical
-        meaning (it is what sets the kinetic-energy cutoff and
-        determines how well the shortest de Broglie wavelength at a
-        given energy ceiling is sampled), whereas num_points alone is
-        span-dependent and gives no direct physical intuition across
-        different systems.
+        grid spacing dx still trustworthy for n levels.
 
     (B) LEVEL-COUNT LIMIT -- fix a grid (span + dx, i.e. fixed
         computational cost) then grow the number of levels requested
         from that SAME grid until the error vs reference exceeds
         tolerance. Finds the highest state index that grid can still
-        be trusted for. The fixed dx is reported in the plot title
-        for context, so results from this search can be read together
-        with the resolution-limit results on the same physical footing.
+        be trusted for, and now continues searching beyond the initial
+        reference length when an extension function is provided.
 
-Both searches work with ANY potential and ANY reference spectrum --
-the reference does not have to be analytic. For systems with no
-closed-form solution, pass in energies from a separately verified,
-much finer/wider numerical DVR run instead; the search logic doesn't
-know or care where the reference came from. This is the intended
-generalization path: this file is what you reach for to sanity-check
-DVR accuracy on a brand-new potential once HO_Analytical_1_0.py-style
-ground truth is no longer available.
+Both searches work with ANY potential and ANY reference spectrum.
 
-CHANGELOG (v1.2 -> v1.3)
+CHANGELOG (v1.3 -> v1.4)
 ---------------------------------------------------------------------
-- Changed the default error metric from "max_abs" to "max_rel" in
-  all three public functions: `find_minimum_grid_points`,
-  `find_maximum_levels`, and `run_dvr_limit_analysis`.
+- `find_maximum_levels` gains an optional `extend_reference_func`
+  parameter. Previously, when the search reached the end of the
+  supplied reference spectrum without finding a breakdown spike, it
+  stopped and reported "capped by reference_length" -- leaving the
+  plot with a flat floor and no visible cliff.
 
-  This affects both the PASS/FAIL criterion (the bisection searches
-  for the boundary where the relative error crosses the tolerance)
-  and the PLOTTED VALUE (the y-axis of both plots now shows
-  max|ΔEₙ/Eₙ|). Keeping the criterion and the plot on the same
-  metric ensures the tolerance line in the plot directly corresponds
-  to the pass/fail boundary that was searched for.
+  With `extend_reference_func` provided, the search instead calls
+  that function to compute additional reference levels on demand,
+  then continues growing n all the way up to the grid's hard ceiling
+  (num_points - 2). This guarantees the plot always shows the full
+  error curve including the breakdown cliff, regardless of how many
+  reference levels were pre-computed upstream.
 
-  WHY RELATIVE ERROR?
-  Absolute error |ΔEₙ| grows with state index n because higher
-  states have larger energies and proportionally larger grid
-  truncation effects. Relative error |ΔEₙ/Eₙ| is nearly constant
-  across n for a well-resolved grid, making the "floor" of the
-  error-vs-dx (or error-vs-n) plot flat and easy to read. The
-  breakdown cliff is still sharp in both metrics; the difference
-  is that the safe region is a clean horizontal line in relative
-  error but a sloped line in absolute error. The tolerance value
-  (e.g. 1e-6) is now dimensionless: 1 part per million relative
-  accuracy across all requested levels.
+  The callable signature is:
+      extend_reference_func(n_needed: int) -> array_like
+  where n_needed is the total number of reference levels required
+  (not a count of extras). The function may compute them fresh each
+  call; caching is the caller's responsibility.
 
-- Y-axis labels in `plot_grid_limit_search` and
-  `plot_level_limit_search` updated to read
-  "Relative error  max|ΔEₙ/Eₙ|" rather than "Error (metric)".
+  A mutable container (_ref) is used internally so the `evaluate`
+  closure always references the latest (possibly extended) reference
+  without needing nonlocal.
+
+  If `extend_reference_func` is None (default), behaviour is
+  identical to v1.3.
+
+- `plot_level_limit_search` updated to annotate "Reference extended"
+  in the plot title when the search used the extension function.
 =====================================================================
 """
 
@@ -359,49 +347,54 @@ def find_minimum_grid_points(potential_func, num_levels, x_min, x_max, reference
 # =====================================================================
 def find_maximum_levels(potential_func, x_min, x_max, num_points, reference_energies,
                          tolerance=1e-6, metric="max_rel", mass=1.0, hbar=1.0,
-                         n_start=None, grow_factor=1.3, verbose=True):
+                         n_start=None, grow_factor=1.3, verbose=True,
+                         extend_reference_func=None):
     """
     Find the LEVEL-COUNT LIMIT of the DVR solver: for a FIXED grid
     (x_min, x_max, num_points -- i.e. a fixed dx), the largest number
     of levels n for which all of the lowest n eigenvalues stay within
     `tolerance` of the reference.
 
-    The fixed dx of the grid is included in all returned results and
-    in the plot title, so this search can be read on the same physical
-    footing as the resolution-limit search above.
-
-    Method: start from a small, comfortably accurate n, then
-    geometrically grow it (by `grow_factor` each step, respecting the
-    solver's num_points > num_levels constraint and the length of
-    `reference_energies`) until the error exceeds tolerance, then
-    integer-bisect to pin the exact crossing level.
+    The search grows n geometrically until the error exceeds tolerance,
+    then bisects to pin the exact crossing level. If `extend_reference_func`
+    is provided and the search exhausts the supplied reference levels
+    without finding a spike, it calls that function to obtain more
+    reference levels and continues up to the grid's hard ceiling
+    (num_points - 2), ensuring the error plot always shows the full
+    curve including the breakdown cliff.
 
     Parameters
     ----------
     potential_func : callable
         V(x), smooth, passed through to the DVR solver.
     x_min, x_max, num_points : float, float, int
-        Fixed grid configuration (held constant throughout). The
-        implied dx = (x_max - x_min) / (num_points - 1) is stored
-        in the returned dict for reference.
+        Fixed grid configuration (held constant throughout).
     reference_energies : array_like
-        Ground-truth spectrum. Should ideally be at least
-        num_points - 2 levels long so the search is capped by the
-        grid constraint rather than by running out of reference data.
+        Initial ground-truth spectrum. Should ideally be at least
+        num_points - 2 levels long. If shorter, provide
+        `extend_reference_func` so the search can obtain more.
     tolerance : float, optional
         Maximum allowed error to "pass" (default 1e-6).
     metric : str, optional
         One of "max_abs", "max_rel", "mean_abs", "mean_rel"
-        (default "max_abs").
+        (default "max_rel").
     mass, hbar : float, optional
         Physical constants passed through to the DVR solver.
     n_start : int or None, optional
-        Starting (expected-accurate) level count. Defaults to
-        max(2, num_points // 20).
+        Starting level count (default max(2, num_points // 20)).
     grow_factor : float, optional
-        Geometric growth ratio applied to n each step (default 1.3).
+        Geometric growth ratio per step (default 1.3).
     verbose : bool, optional
-        Print a one-line summary at the end (default True).
+        Print progress lines (default True).
+    extend_reference_func : callable or None, optional
+        If provided and the search reaches the reference ceiling
+        without finding a spike, this function is called as:
+            extend_reference_func(n_needed: int) -> array_like
+        and must return at least `n_needed` reference energy levels.
+        The search then continues up to the grid's hard ceiling.
+        If None (default), behaviour is unchanged from v1.3: the
+        search stops at min(num_points-2, len(reference_energies))
+        and reports "capped by reference_length".
 
     Returns
     -------
@@ -410,21 +403,25 @@ def find_maximum_levels(potential_func, x_min, x_max, num_points, reference_ener
             Largest n within tolerance. None if even n_start fails.
         error_at_maximum : float
         dx_fixed : float
-            The constant grid spacing of the fixed grid, for context.
         capped_by : str
-            "tolerance" if a genuine breakdown was found, "grid_size"
-            if growth was stopped by the num_points > num_levels
-            constraint, or "reference_length" if growth was stopped
-            by running out of reference data before failing.
-        trace : list of dict
-            Every {"n", "error", "passed"} tested, in evaluated order.
+            "tolerance", "grid_size", or "reference_length".
+        reference_extended : bool
+            True if extend_reference_func was called during the search.
+        trace : list of dict  -- every {"n", "error", "passed"} tested.
         tolerance, metric, num_points : echoed back for convenience.
     """
-    span = x_max - x_min
+    span     = x_max - x_min
     dx_fixed = span / (num_points - 1)
-    hard_ceiling = num_points - 2   # colbert_miller_dvr_1d requires num_points > num_levels
-    ref_ceiling = len(reference_energies)
-    n_cap = min(hard_ceiling, ref_ceiling)
+    hard_ceiling = num_points - 2  # DVR requires num_points > num_levels
+
+    # Use a single-element mutable list as a "pointer" to the current
+    # reference array. The inner evaluate() closure captures _ref itself
+    # (not its contents), so reassigning _ref[0] is visible to all
+    # subsequent evaluate() calls without needing nonlocal.
+    _ref = [np.asarray(reference_energies, dtype=float)]
+    ref_ceiling   = len(_ref[0])
+    n_cap         = min(hard_ceiling, ref_ceiling)
+    reference_extended = False
 
     if n_cap < 2:
         raise ValueError("Grid/reference too small to test any levels (n_cap < 2).")
@@ -436,8 +433,11 @@ def find_maximum_levels(potential_func, x_min, x_max, num_points, reference_ener
     trace = []
 
     def evaluate(n):
-        E_test = colbert_miller_dvr_1d(potential_func, n, x_min, x_max, num_points, mass, hbar)
-        passed, err, _ = _passes_tolerance(E_test, reference_energies, tolerance, metric)
+        """Compute n DVR levels, compare against _ref[0][:n], log to trace."""
+        E_test = colbert_miller_dvr_1d(
+            potential_func, n, x_min, x_max, num_points, mass, hbar
+        )
+        passed, err, _ = _passes_tolerance(E_test, _ref[0], tolerance, metric)
         trace.append({"n": n, "error": err, "passed": passed})
         return passed, err
 
@@ -446,36 +446,72 @@ def find_maximum_levels(potential_func, x_min, x_max, num_points, reference_ener
         if verbose:
             print(
                 f"  [Level Limit] dx={dx_fixed:.4g}: even n_start={n_start} fails "
-                f"(error={err:.3e}) -- this grid is too coarse for any level-count "
-                f"analysis; try a finer fixed grid."
+                f"(error={err:.3e}) -- try a finer fixed grid."
             )
         return {
             "maximum_levels": None, "error_at_maximum": err, "dx_fixed": dx_fixed,
-            "capped_by": "tolerance", "trace": trace,
-            "tolerance": tolerance, "metric": metric, "num_points": num_points,
+            "capped_by": "tolerance", "reference_extended": False,
+            "trace": trace, "tolerance": tolerance, "metric": metric,
+            "num_points": num_points,
         }
 
     good_n, good_err = n_start, err
-    bad_n = None
+    bad_n  = None
     capped_by = "tolerance"
 
-    while good_n < n_cap:
-        candidate = min(int(np.ceil(good_n * grow_factor)), n_cap)
-        if candidate <= good_n:
-            candidate = good_n + 1
-        passed, err = evaluate(candidate)
-        if passed:
-            good_n, good_err = candidate, err
-        else:
-            bad_n = candidate
+    # Outer loop: allows one extension of the reference, then continues.
+    while True:
+        # --- Geometrically grow n until tolerance breaks or n_cap is reached ---
+        while good_n < n_cap:
+            candidate = min(int(np.ceil(good_n * grow_factor)), n_cap)
+            if candidate <= good_n:
+                candidate = good_n + 1
+            passed, err = evaluate(candidate)
+            if passed:
+                good_n, good_err = candidate, err
+            else:
+                bad_n = candidate
+                break
+
+        if bad_n is not None:
+            # Found a failure -- bisect and exit.
+            capped_by = "tolerance"
             break
-    else:
-        # Reached n_cap without ever failing -- report what capped us.
-        capped_by = "grid_size" if hard_ceiling <= ref_ceiling else "reference_length"
+
+        # Reached n_cap without failure -- determine why and whether to extend.
+        if good_n >= hard_ceiling:
+            capped_by = "grid_size"
+            break
+
+        # Reference ran out before the grid ceiling.
+        if extend_reference_func is None:
+            capped_by = "reference_length"
+            break
+
+        # Try to extend the reference up to the grid's hard ceiling.
+        if verbose:
+            print(
+                f"  [Level Limit] Reference exhausted at n={n_cap}. "
+                f"Extending to {hard_ceiling} levels ..."
+            )
+        new_ref = np.asarray(extend_reference_func(hard_ceiling), dtype=float)
+        if len(new_ref) <= ref_ceiling:
+            # Extension didn't add anything useful.
+            if verbose:
+                print("  [Level Limit] Extension returned no additional levels; stopping.")
+            capped_by = "reference_length"
+            break
+
+        # Update the shared reference pointer seen by evaluate().
+        _ref[0]  = new_ref
+        ref_ceiling = len(_ref[0])
+        n_cap    = min(hard_ceiling, ref_ceiling)
+        reference_extended = True
+        # Loop back to continue growing n from good_n.
 
     # --- Bisect between the last good and first bad level count ---
     if bad_n is not None:
-        lo, hi = good_n, bad_n   # lo: passes, hi: fails
+        lo, hi = good_n, bad_n  # lo passes, hi fails
         while hi - lo > 1:
             mid = (lo + hi) // 2
             passed, err = evaluate(mid)
@@ -483,25 +519,27 @@ def find_maximum_levels(potential_func, x_min, x_max, num_points, reference_ener
                 lo, good_err = mid, err
             else:
                 hi = mid
-        good_n = lo
+        good_n    = lo
         capped_by = "tolerance"
 
     if verbose:
+        ext_tag = "  (reference extended)" if reference_extended else ""
         print(
             f"  [Level Limit] dx={dx_fixed:.4g} ({num_points} pts): "
             f"maximum trustworthy n = {good_n}  "
-            f"(error={good_err:.3e}, capped by {capped_by})"
+            f"(error={good_err:.3e}, capped by {capped_by}){ext_tag}"
         )
 
     return {
-        "maximum_levels": good_n,
-        "error_at_maximum": good_err,
-        "dx_fixed": dx_fixed,
-        "capped_by": capped_by,
-        "trace": trace,
-        "tolerance": tolerance,
-        "metric": metric,
-        "num_points": num_points,
+        "maximum_levels":     good_n,
+        "error_at_maximum":   good_err,
+        "dx_fixed":           dx_fixed,
+        "capped_by":          capped_by,
+        "reference_extended": reference_extended,
+        "trace":              trace,
+        "tolerance":          tolerance,
+        "metric":             metric,
+        "num_points":         num_points,
     }
 
 
@@ -607,9 +645,10 @@ def plot_level_limit_search(level_result, system_name="System"):
     dx_label  = f"\u0394x = {dx_fixed:.4g}" if dx_fixed is not None else ""
 
     fig, ax = plt.subplots(figsize=(8, 5))
+    ext_note = "  [reference extended]" if level_result.get("reference_extended") else ""
     fig.suptitle(
         f"{system_name} \u2014 DVR Level-Count Limit\n"
-        f"(fixed grid: {num_pts} pts, {dx_label})",
+        f"(fixed grid: {num_pts} pts, {dx_label}){ext_note}",
         fontsize=12, fontweight="bold",
     )
 

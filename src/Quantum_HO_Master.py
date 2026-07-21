@@ -49,15 +49,17 @@ import threading
 import time
 import multiprocessing
 
-from DVR.DVR_Algorithm              import auto_configure_dvr, get_fully_converged_energy_levels
-from error.error_energylevels      import (compute_energy_level_errors,
+from DVR.DVR_Algorithm              import (auto_configure_dvr, 
+                                            get_fully_converged_energy_levels, 
+                                            colbert_miller_dvr_1d)
+from error.error_energylevels       import (compute_energy_level_errors,
                                            plot_energy_level_comparison,
                                            plot_energy_level_error,
                                            print_accuracy_summary)
-from Quantum_Classical_Combined import run as run_general_cv_pipeline
+from Quantum_Classical_Combined     import run as run_general_cv_pipeline
 from DVR.DVR_Limit_Finder           import run_dvr_limit_analysis
 from DVR.DVR_Reference_Generator    import generate_reference_energies
-from Cv_Numerical_Benchmark     import run_cv_numerical_benchmark
+from Cv_Numerical_Benchmark         import run_cv_numerical_benchmark
 
 
 # =====================================================================
@@ -114,20 +116,29 @@ if __name__ == "__main__":
     MASS, HBAR, OMEGA = 1.0, 1.0, 1.0
 
     # --- Potential function (swap this for any smooth V(x)) ---
+    '''
     def my_potential(x):
         """1-D harmonic oscillator: V(x) = ½ m ω² x²."""
         return 0.5 * MASS * (OMEGA**2) * x**2
 
     SYSTEM_NAME   = "1-D Harmonic Oscillator"
     T_UNITS_LABEL = r"$k_B T \,/\, \hbar\omega$"
+    '''
 
+    def my_potential(x):
+            """1-D symmetric double well: V(x) = 1/4 x^4 - 1/2 x^2."""
+            return 0.25 * (x ** 4) - 0.5 * (x **2)
+    
+    SYSTEM_NAME   = "1-D symmetric double well"
+    T_UNITS_LABEL = r"$k_B T \,/\, \hbar\omega$"
+    
     # --- DVR base grid: number of energy levels ---
     # The n-convergence diagnostic (Section 4) will confirm the exact
     # number needed; 500 gives comfortable headroom for this system.
-    NUM_STATES = 2500
+    NUM_STATES = 1500       # OG HO -> 500
 
     # --- Temperature sweep ---
-    BETA_MIN, BETA_MAX, N_BETA = 0.1, 50.0, 500
+    BETA_MIN, BETA_MAX, N_BETA = 0.0001, 50.0, 1000      #OG HO -> 0.01, 50.0, 1000
 
     # --- xi / n convergence parameters ---
     # XI_START = 3.0: first probe is already at effective T/9, allowing
@@ -272,6 +283,14 @@ if __name__ == "__main__":
     print("  SECTION 5 — DVR limit analysis (vs numerical reference)")
     print("="*60)
 
+    extend_fn = lambda n_needed: colbert_miller_dvr_1d(
+        my_potential, n_needed,
+        reference_result["grid"]["x_min_ref"],
+        reference_result["grid"]["x_max_ref"],
+        reference_result["grid"]["num_points_ref"],
+        MASS, HBAR,
+    )
+    
     with SimpleTimer("Section 5: DVR limit searches"):
         limit_results = run_dvr_limit_analysis(
             potential_func=my_potential,
@@ -283,6 +302,7 @@ if __name__ == "__main__":
             tolerance=LIMIT_TOLERANCE,
             metric="max_abs",
             mass=MASS, hbar=HBAR,
+            level_search_kwargs={"extend_reference_func": extend_fn},
         )
 
     # =================================================================
