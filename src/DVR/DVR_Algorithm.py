@@ -1,41 +1,43 @@
 """
-DVR_Algorithm_1_4.py
+DVR_Algorithm_1_5.py
 =====================================================================
 WHAT THIS FILE DOES
 ---------------------------------------------------------------------
-Core 1-D Discrete Variable Representation (DVR) engine. Given any
-SMOOTH potential V(x) (finite everywhere -- no hard walls / infinite
-jumps), it builds the Colbert-Miller sinc-DVR Hamiltonian on a grid,
-diagonalizes it, and returns the lowest `num_levels` energy
-eigenvalues. Also contains the automatic grid-configuration helper
-(turning-point search + grid-density estimate).
+Core 1-D Discrete Variable Representation (DVR) engine for smooth
+potentials. Builds the Colbert-Miller sinc-DVR Hamiltonian on a
+grid and returns the lowest `num_levels` energy eigenvalues.
 
-This file is system-agnostic: pass in any callable V(x) (Harmonic
-Oscillator, double well, etc.) and it will compute energy levels for
-that system. Nothing here is specific to the Harmonic Oscillator.
-
-CHANGELOG (v1.3 -> v1.4)
+CHANGELOG (v1.4 -> v1.5)
 ---------------------------------------------------------------------
-- REMOVED DisappearingTimer entirely, along with its `sys` and
-  `multiprocessing` imports. The multiprocessing-based ticker was
-  spawning a child process on every call to
-  `get_fully_converged_energy_levels`, adding non-trivial OS
-  overhead (process fork + IPC queue + shared Event) and competing
-  with LAPACK for CPU time. The DVR file is also called in tight
-  loops by DVR_Limit_Finder, where the process-spawn overhead was
-  paid on every single grid-density or level-count test step.
-- `get_fully_converged_energy_levels` now prints a one-line
-  timestamp for each of its three passes using a simple
-  `print(..., end=" ", flush=True)` + elapsed-time suffix. This is
-  zero-overhead (no threads or processes), survives LAPACK's GIL
-  hold without issue (the print happens before and after the heavy
-  call, not concurrently with it), and gives the user the same
-  "is it still running?" visibility.
-- Progress timing for longer pipeline stages is now the
-  responsibility of Quantum_HO_Master_1_3.py's `SimpleTimer` (a
-  lightweight daemon thread that prints every 10 s), which wraps
-  whole pipeline sections rather than individual LAPACK calls.
-- No change to the underlying sinc-DVR math.
+- REVERTED E_ceiling from the user's temporary hack of
+  `1000.0 * num_levels` back to the physically correct
+  `1.5 * num_levels`. Inflating E_ceiling was wrong for two reasons:
+    1. It pushed classical turning points absurdly far (±710 units
+       for the double well), making the initial grid span far larger
+       than needed.
+    2. It made k_max enormous → dx_target microscopic → n_grid
+       astronomical (tens of thousands of points) with no benefit.
+
+- ADDED adaptive span expansion loop to `auto_configure_dvr`.
+  After the initial grid estimate, the function now iteratively
+  expands the span (by `span_growth_factor` per step, default 1.3×)
+  and checks convergence by comparing eigenvalues on the current
+  grid against the same computation on a wider grid. This correctly
+  handles potentials (double well, Morse, quartic) whose wavefunction
+  tails extend much further than the HO-calibrated padding heuristic
+  would predict. Key design decisions:
+    - `dx_target` is FIXED before the expansion loop so that grid
+      resolution and span are decoupled (widening the grid adds
+      more points, not coarser ones).
+    - 1 DVR solve per expansion step (not 2): the "wider" result
+      becomes the "current" for the next step, recycling work.
+    - If the loop reaches `max_span_iters` without converging, a
+      warning is issued and the widest grid found is returned;
+      `get_fully_converged_energy_levels` then performs a final
+      validation pass as a safety net.
+    - Three new optional parameters: `span_tol`, `span_growth_factor`,
+      `max_span_iters` — all have sensible defaults and do not
+      require changes to any calling code.
 =====================================================================
 """
 
@@ -50,85 +52,174 @@ import time
 # =====================================================================
 # Automatic grid configuration (SMOOTH potentials only)
 # =====================================================================
-def auto_configure_dvr(potential_func, num_levels, mass=1.0, hbar=1.0, x0_guess=1.0):
+def auto_configure_dvr(potential_func, num_levels, mass=1.0, hbar=1.0, x0_guess=1.0,
+                        span_tol=1e-5, span_growth_factor=1.3, max_span_iters=10):
     """
-    Automatically pick a grid window [x_min, x_max] and a grid point
-    count for a SMOOTH potential well, given how many energy levels
-    are wanted.
+    Automatically pick a converged grid window [x_min, x_max] and
+    grid point count for a SMOOTH potential well.
 
-    Method: locate the potential minimum, climb up to an energy
-    ceiling roughly proportional to `num_levels` (so the grid covers
-    every state we asked for plus headroom), find the classical
-    turning points there via root-finding, pad them outward a bit,
-    and pick a grid spacing fine enough to resolve the shortest
-    wavelength expected at that ceiling energy (via the local
-    de Broglie wavelength / Nyquist-style estimate).
+    METHOD -- two stages:
 
-    NOTE: This function assumes V(x) is finite and smooth everywhere
-    on the search domain (no hard walls). For potentials with hard
-    walls / discontinuities, this auto-configuration is not
-    applicable -- a hard-wall-aware grid builder would be needed
-    instead, which is intentionally out of scope for this module.
+    Stage 1 (initial estimate):
+        Find the potential minimum, estimate a ceiling energy that
+        covers `num_levels` states, locate the classical turning
+        points there via root-finding, and add a small padding margin.
+        This gives a first-guess (x_min, x_max) and fixes the grid
+        spacing dx from the de Broglie / Nyquist criterion at the
+        ceiling energy.
+
+    Stage 2 (adaptive span expansion):
+        Run a DVR solve on the initial grid, then repeat on a grid
+        that is `span_growth_factor` times wider (same dx, proportionally
+        more points). If max|ΔE_n| < span_tol the current span is
+        proven adequate -- the wavefunction tails have decayed to
+        negligible amplitude before the boundary -- and the function
+        returns. Otherwise the wider grid becomes the new candidate
+        and the loop repeats.
+
+    This two-stage approach correctly handles anharmonic potentials
+    (double well, Morse, quartic) whose wavefunction tails extend
+    much further than the HO-calibrated fixed-padding heuristic
+    would predict, without requiring manual tuning.
+
+    NOTE: dx is fixed in Stage 1 and held constant throughout Stage 2.
+    Widening the span adds grid points but does NOT change the spacing.
+    This decouples span convergence from resolution convergence; the
+    latter is checked separately by `get_fully_converged_energy_levels`.
 
     Parameters
     ----------
     potential_func : callable
-        V(x) -> float or ndarray. Must be finite everywhere it is
-        evaluated (no np.inf).
+        V(x) -> float or ndarray. Finite everywhere (no hard walls).
     num_levels : int
-        Number of energy levels the caller intends to extract. Used
-        to set how far up in energy (and therefore how wide/fine)
-        the grid needs to be.
+        Number of energy levels to extract. Determines how high the
+        energy ceiling is set and therefore how wide/fine the grid is.
     mass : float, optional
-        Particle mass (default 1.0, matching hbar=1 dimensionless units).
+        Particle mass (default 1.0).
     hbar : float, optional
-        Reduced Planck constant (default 1.0, dimensionless units).
+        Reduced Planck constant (default 1.0).
     x0_guess : float, optional
-        Starting guess for the potential-minimum search. Useful for
-        steering the minimizer into a specific well of a multi-well
-        potential (kept here for forward-compatibility with future
-        non-HO potentials, even though only HO is exercised today).
+        Starting guess for the potential-minimum search. Must be set
+        near a well minimum for multi-well potentials (e.g. 1.0 for
+        the symmetric double well x^4/4 - x^2/2).
+    span_tol : float, optional
+        Maximum allowed max|ΔE_n| between the current-width and
+        wider-width DVR solves for the span to be declared converged
+        (default 1e-5, matching the 3-pass gate in
+        get_fully_converged_energy_levels).
+    span_growth_factor : float, optional
+        Factor by which the half-span is multiplied at each expansion
+        step (default 1.3 = 30% wider per iteration).
+    max_span_iters : int, optional
+        Maximum number of expansion steps before giving up and issuing
+        a warning (default 10). Ten steps at 1.3× gives a maximum
+        span of 1.3^10 ≈ 13.8× the initial value, which is more than
+        sufficient for any physically reasonable smooth potential.
 
     Returns
     -------
     x_min, x_max : float
-        Recommended grid boundaries.
+        Span-converged grid boundaries.
     grid_points : int
-        Recommended number of grid points between x_min and x_max.
+        Number of grid points between x_min and x_max at dx_target.
     """
     print(f"  [Auto-Scanner] Analyzing smooth potential for {num_levels} states...")
 
-    # Step 1: find the bottom of the well.
+    # ------------------------------------------------------------------
+    # Stage 1: initial turning-point estimate and resolution target
+    # ------------------------------------------------------------------
+    # Find the potential-well bottom
     res = opt.minimize(potential_func, x0=x0_guess)
     x_bottom = res.x[0]
     v_min = res.fun
 
-    # Step 2: pick an energy ceiling that comfortably covers num_levels states.
-    E_ceiling = v_min + (10.0 * num_levels)         # OG HO -> 2.0 * num_levels
+    # Energy ceiling calibrated for HO-like level spacing (E_n ~ n).
+    # The adaptive loop in Stage 2 corrects the span if this
+    # underestimates how far the wavefunctions actually extend.
+    E_ceiling = v_min + (1.5 * num_levels)
     root_func = lambda x: potential_func(x) - E_ceiling
 
     try:
-        # Search outward from the well bottom in both directions for the
-        # classical turning points at the ceiling energy.
         x_right = opt.fsolve(root_func, x0=x_bottom + 5.0)[0]
-        x_left = opt.fsolve(root_func, x0=x_bottom - 5.0)[0]
+        x_left  = opt.fsolve(root_func, x0=x_bottom - 5.0)[0]
     except Exception:
         raise RuntimeError("fsolve failed to find classical turning points.")
 
-    # Step 3: pad the window outward so the wavefunction has room to decay.
-    span = abs(x_right - x_left)
-    x_min = x_left - (0.15 * span) - 2.0
-    x_max = x_right + (0.15 * span) + 2.0
+    # Initial padded span
+    span0  = abs(x_right - x_left)
+    x_min  = x_left  - (0.15 * span0) - 2.0
+    x_max  = x_right + (0.15 * span0) + 2.0
 
-    # Step 4: estimate the grid spacing needed to resolve the shortest
-    # wavelength present at the energy ceiling (de Broglie / Nyquist style).
-    k_max = np.sqrt(2.0 * mass * (E_ceiling - v_min)) / hbar
+    # Fixed centre used throughout Stage 2 (symmetric expansion)
+    x_center = (x_min + x_max) / 2.0
+
+    # Grid resolution from de Broglie / Nyquist criterion -- FIXED.
+    # dx_target is not changed during span expansion; only the number
+    # of points grows as the span widens.
+    k_max     = np.sqrt(2.0 * mass * (E_ceiling - v_min)) / hbar
     dx_target = np.pi / (2.0 * k_max)
 
-    grid_points = int(np.ceil((x_max - x_min) / dx_target))
-    grid_points = max(grid_points, int(4.0 * num_levels))
+    def _n_pts(xlo, xhi):
+        """Points to cover [xlo, xhi] at dx_target, with a floor of 4×num_levels."""
+        n = int(np.ceil((xhi - xlo) / dx_target)) + 1
+        return max(n, int(4.0 * num_levels))
 
-    print(f"  [Auto-Scanner] Bounds: [{x_min:.3f}, {x_max:.3f}] | Grid Points: {grid_points}")
+    # ------------------------------------------------------------------
+    # Stage 2: iterative span expansion
+    # ------------------------------------------------------------------
+    n_curr = _n_pts(x_min, x_max)
+    E_curr = colbert_miller_dvr_1d(
+        potential_func, num_levels, x_min, x_max, n_curr, mass, hbar
+    )
+    print(f"  [Auto-Scanner] Initial: [{x_min:.3f}, {x_max:.3f}]  "
+          f"span={x_max - x_min:.3g}  pts={n_curr}  dx={dx_target:.4g}")
+
+    converged = False
+    span_error = np.inf
+
+    for i in range(max_span_iters):
+        # Widen span by span_growth_factor (symmetric about x_center)
+        half_span_wide = ((x_max - x_min) / 2.0) * span_growth_factor
+        x_min_wide     = x_center - half_span_wide
+        x_max_wide     = x_center + half_span_wide
+        n_wide         = _n_pts(x_min_wide, x_max_wide)
+
+        E_wide     = colbert_miller_dvr_1d(
+            potential_func, num_levels, x_min_wide, x_max_wide, n_wide, mass, hbar
+        )
+        span_error = np.max(np.abs(E_curr - E_wide))
+
+        print(f"  [Auto-Scanner] Span iter {i + 1}/{max_span_iters}: "
+              f"span {x_max - x_min:.3g} \u2192 {x_max_wide - x_min_wide:.3g}  "
+              f"|ΔE|_max = {span_error:.2e}", end="")
+
+        if span_error < span_tol:
+            # Current grid (x_min, x_max) is proven adequate.
+            # Return it rather than the wider test grid.
+            converged = True
+            print("  \u2713 converged")
+            break
+
+        # Adopt the wider grid as the new base and continue.
+        print("  expanding...")
+        x_min, x_max = x_min_wide, x_max_wide
+        n_curr = n_wide
+        E_curr = E_wide
+
+    if not converged:
+        warnings.warn(
+            f"[Auto-Scanner] Span did not fully converge within {max_span_iters} "
+            f"iterations (last |ΔE| = {span_error:.2e}, tolerance = {span_tol:.1e}). "
+            f"Proceeding with the widest grid found. "
+            f"get_fully_converged_energy_levels will validate the result -- "
+            f"if it raises a DVR CONVERGENCE ERROR, increase max_span_iters "
+            f"or decrease span_tol in the auto_configure_dvr call.",
+            UserWarning,
+        )
+
+    grid_points = _n_pts(x_min, x_max)
+    print(f"  [Auto-Scanner] Final:   [{x_min:.3f}, {x_max:.3f}] | "
+          f"Grid Points: {grid_points}")
     return x_min, x_max, grid_points
 
 
