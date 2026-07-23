@@ -127,7 +127,8 @@ if __name__ == "__main__":
 
     def my_potential(x):
             """1-D symmetric double well: V(x) = 1/4 x^4 - 1/2 x^2."""
-            return 0.25 * (x ** 4) - 0.5 * (x **2)
+            a, b, c, d = 0.25, -0.5, -0.5, 0
+            return a * (x ** 4) + b * (x ** 3) + c * (x **2) + d * x
     
     SYSTEM_NAME   = "1-D symmetric double well"
     T_UNITS_LABEL = r"$k_B T \,/\, \hbar\omega$"
@@ -135,10 +136,10 @@ if __name__ == "__main__":
     # --- DVR base grid: number of energy levels ---
     # The n-convergence diagnostic (Section 4) will confirm the exact
     # number needed; 500 gives comfortable headroom for this system.
-    NUM_STATES = 1500       # OG HO -> 500
+    NUM_STATES = 500       
 
     # --- Temperature sweep ---
-    BETA_MIN, BETA_MAX, N_BETA = 0.0001, 50.0, 1000      #OG HO -> 0.01, 50.0, 1000
+    BETA_MIN, BETA_MAX, N_BETA = 0.01, 50.0, 1000 
 
     # --- xi / n convergence parameters ---
     # XI_START = 3.0: first probe is already at effective T/9, allowing
