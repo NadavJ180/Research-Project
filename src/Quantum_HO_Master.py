@@ -60,6 +60,16 @@ from Quantum_Classical_Combined     import run as run_general_cv_pipeline
 from DVR.DVR_Limit_Finder           import run_dvr_limit_analysis
 from DVR.DVR_Reference_Generator    import generate_reference_energies
 from Cv_Numerical_Benchmark         import run_cv_numerical_benchmark
+from config                         import (MASS, HBAR, OMEGA, my_potential,
+                                            SYSTEM_NAME, T_UNITS_LABEL,
+                                            NUM_STATES, BETA_MIN, BETA_MAX,
+                                            N_BETA, XI_START, TOL_XI,
+                                            MIN_STABLE_XI, XI_MULT,
+                                            MAX_XI_STEPS, TOL_CV,
+                                            MIN_STABLE_N, LIMIT_TOLERANCE,
+                                            INTERACTIVE_REFERENCE_SCALING,
+                                            REFERENCE_SPAN_FACTOR,
+                                            REFERENCE_DX_FACTOR, ref_label)
 
 
 # =====================================================================
@@ -108,66 +118,12 @@ if __name__ == "__main__":
 
     # =================================================================
     # SECTION 0 -- Configuration
-    # This is the ONLY section that needs editing when changing system,
-    # parameters, or reference scaling.
+    # Moved to config.py so it can be imported by other scripts (e.g.
+    # src/figures/plot_potential.py) without running this entire
+    # pipeline as a side effect. Edit config.py to change system,
+    # parameters, or reference scaling -- nothing here needs to change.
     # =================================================================
 
-    # --- Physical constants (dimensionless: ℏ = m = ω = k_B = 1) ---
-    MASS, HBAR, OMEGA = 1.0, 1.0, 1.0
-
-    # --- Potential function (swap this for any smooth V(x)) ---
-    '''
-    def my_potential(x):
-        """1-D harmonic oscillator: V(x) = ½ m ω² x²."""
-        return 0.5 * MASS * (OMEGA**2) * x**2
-
-    SYSTEM_NAME   = "1-D Harmonic Oscillator"
-    T_UNITS_LABEL = r"$k_B T \,/\, \hbar\omega$"
-    '''
-
-    def my_potential(x):
-            """1-D symmetric double well: V(x) = 1/4 x^4 - 1/2 x^2."""
-            a, b, c, d = 0.25, -0.5, -0.5, 0
-            return a * (x ** 4) + b * (x ** 3) + c * (x **2) + d * x
-    
-    SYSTEM_NAME   = "1-D symmetric double well"
-    T_UNITS_LABEL = r"$k_B T \,/\, \hbar\omega$"
-    
-    # --- DVR base grid: number of energy levels ---
-    # The n-convergence diagnostic (Section 4) will confirm the exact
-    # number needed; 500 gives comfortable headroom for this system.
-    NUM_STATES = 500       
-
-    # --- Temperature sweep ---
-    BETA_MIN, BETA_MAX, N_BETA = 0.01, 50.0, 1000 
-
-    # --- xi / n convergence parameters ---
-    # XI_START = 3.0: first probe is already at effective T/9, allowing
-    # the classical-limit plateau to be found at much colder temperatures
-    # than XI_START = 1.0 would permit.
-    XI_START      = 3.0
-    TOL_XI        = 5e-3
-    MIN_STABLE_XI = 3
-    XI_MULT       = 1.1
-    MAX_XI_STEPS  = 80
-    TOL_CV        = 1e-4
-    MIN_STABLE_N  = 3
-
-    # --- DVR limit analysis tolerance (Section 5) ---
-    LIMIT_TOLERANCE = 1e-6
-
-    # --- Numerical reference scaling (Sections 2, 3, 5, 6) ---
-    # REFERENCE_SPAN_FACTOR: multiply base span by this (2.0 = double L)
-    # REFERENCE_DX_FACTOR:   divide base dx   by this (2.0 = halve Δx)
-    # Set INTERACTIVE = True to be prompted at runtime instead.
-    INTERACTIVE_REFERENCE_SCALING = False
-    REFERENCE_SPAN_FACTOR         = 2.0
-    REFERENCE_DX_FACTOR           = 2.0
-
-    # Human-readable label built from the scaling factors (used in plots).
-    ref_label = (f"numerical reference  "
-                 f"(span\u00d7{REFERENCE_SPAN_FACTOR:.2g}, "
-                 f"dx\u00f7{REFERENCE_DX_FACTOR:.2g})")
 
     # =================================================================
     # SECTION 1 -- DVR base computation

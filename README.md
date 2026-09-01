@@ -205,6 +205,25 @@ Section 5: DVR limit analysis ─── max Δx and max n, checked vs reference
 Section 6: Cv benchmark ──────── base Cv vs reference Cv (quantum + classical)
 ```
 
+```mermaid
+flowchart TD
+    A["1. Define potential V(x) and mass m"] --> B["2. Auto-configure grid<br/>(turning points + Nyquist Δx)"]
+    B --> C["3. Solve base DVR spectrum {Eₙ}"]
+    C --> D["4. Generate high-resolution reference spectrum"]
+    D --> E["5. Verify resolution / boundary convergence"]
+    E -- "not converged: refine grid" --> B
+    E --> F["6. Compute Cᵥ(T); scan ξ for classical plateau + n-check"]
+    F --> G["7. Benchmark base vs. reference Cᵥ(T)"]
+
+    style A fill:#dbe9f6,stroke:#333
+    style B fill:#dbe9f6,stroke:#333
+    style C fill:#cfe8cf,stroke:#333
+    style D fill:#cfe8cf,stroke:#333
+    style E fill:#f6e6c9,stroke:#333
+    style F fill:#f6d3c9,stroke:#333
+    style G fill:#e3d6f0,stroke:#333
+```
+
 ---
 
 ## Section-by-Section Walkthrough
