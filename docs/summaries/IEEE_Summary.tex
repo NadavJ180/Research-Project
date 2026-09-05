@@ -87,11 +87,33 @@ C_v^{\text{HO}} = \frac{1}{4}k_B\left[\beta\hbar\omega\,\operatorname{csch}\!\le
 tending to the equipartition value $k_B$ as $\beta\hbar\omega\to0$. Equation~\eqref{eq:cvho} is the closed-form answer the pipeline is checked against in Section~\ref{sec:validation}.
 
 % ===================== III. DVR METHOD =====================
-\section{Physical Basis of the Numerical Method}
+\section{The Discrete Variable Representation}
 \label{sec:dvr}
-For potentials with no analytical spectrum, $\{E_n\}$ is obtained from a Colbert--Miller sinc discrete variable representation (DVR) \cite{colbertmiller1992,lightcarrington2000}, which represents the wavefunction by its values on an evenly spaced grid. The grid is faithful only if sampled finely enough relative to how quickly $\psi(x)$ oscillates, which the Nyquist--Shannon theorem turns into a condition on the local momentum of the state being represented. The same argument is why the solver is restricted to potentials with no true discontinuity: at a hard wall the wavefunction's derivative jumps, its momentum content becomes effectively unbounded, and no finite grid can resolve it without aliasing high-momentum content back into the low-lying spectrum.
 
-The grid span and spacing are set automatically from the potential itself: the span from where the wavefunctions have decayed to negligible amplitude, widened iteratively until the eigenvalues stop changing, and the spacing from the local de Broglie wavelength at the highest energy requested. Because a finite grid carries two logically distinct error sources -- too coarse a spacing, or too narrow a span -- the pipeline checks each independently, in the spirit of a Richardson-extrapolation convergence study, before any spectrum is used downstream.
+\subsection{Why a Grid-Based Representation Works at All}
+For potentials with no analytical spectrum, $\{E_n\}$ is obtained from a Colbert--Miller sinc discrete variable representation (DVR) \cite{colbertmiller1992,lightcarrington2000}, which represents the wavefunction by its values on an evenly spaced grid rather than by coefficients in an analytical basis. The grid is faithful only if sampled finely enough relative to how quickly $\psi(x)$ oscillates, which the Nyquist--Shannon theorem turns into a condition on the local momentum of the state being represented: the grid spacing must resolve the shortest local de Broglie wavelength present in the wavefunction, or that high-momentum content aliases back into the low-lying part of the computed spectrum.
+
+\subsection{The Kinetic-Energy Matrix}
+\label{sec:kinetic}
+On a grid of $N$ points with spacing $\Delta x$, the potential is trivially diagonal, $V_{ij}=V(x_i)\delta_{ij}$; the entire method rests on the Colbert--Miller closed-form kinetic-energy matrix for a sinc (unbounded-domain) DVR basis \cite{colbertmiller1992},
+\begin{equation}
+T_{ij} = \frac{\hbar^2}{2m\Delta x^2}\times
+\begin{cases}
+\dfrac{\pi^2}{3}, & i=j,\\[4pt]
+\dfrac{2\,(-1)^{i-j}}{(i-j)^2}, & i\neq j.
+\end{cases}
+\label{eq:kinetic}
+\end{equation}
+This is an exact result (not an approximation) for the kinetic energy operator restricted to the space of band-limited functions sampled on that grid; the diagonal case follows from its own closed-form summation identity rather than by extrapolating the $i\neq j$ expression, which is singular -- not merely indeterminate -- at $i=j$. Because $T_{ij}$ in Eq.~\eqref{eq:kinetic} depends only on $|i-j|$, only $N$ distinct values need ever be evaluated -- the matrix's first row -- rather than the formula being evaluated independently at all $N^2$ entries; the full (still $N\times N$) Toeplitz matrix is then expanded from that row. The full Hamiltonian $H=T+V$ is then diagonalized with a banded/symmetric eigensolver that extracts only the lowest $N_{\text{lev}}$ eigenvalues directly (LAPACK's MRRR algorithm, via \texttt{eigvalsh} with an explicit index range), avoiding the cost of resolving the full, unneeded upper part of the spectrum.
+
+\subsection{Why Only Smooth Potentials}
+The sampling argument of Section~\ref{sec:dvr}-A also explains why the solver is restricted to potentials with no true discontinuity. At a hard wall the wavefunction's derivative jumps, its momentum content becomes effectively unbounded, and no finite grid spacing can resolve it -- attempting to do so aliases the unresolvable high-momentum content back into the low-lying, physically relevant part of the spectrum. Equation~\eqref{eq:kinetic} itself is also only valid where $V(x)$ is finite everywhere the grid is evaluated; the implementation raises an explicit error rather than silently return a wrong answer if a potential violates this.
+
+\subsection{Automatic Grid Configuration}
+The grid span and spacing are set automatically from the potential itself, rather than by hand. An energy ceiling $E_{\text{ceil}}\approx v_{\min}+1.5\,N_{\text{lev}}$ -- calibrated for the roughly-linear level spacing of an HO-like well, and only ever used as a starting estimate -- fixes a target grid extent via the classical turning points where $V(x)=E_{\text{ceil}}$, located by root-finding; the grid is padded modestly beyond them. The spacing is then set from the local momentum at that ceiling, $k_{\max}=\sqrt{2m(E_{\text{ceil}}-v_{\min})}/\hbar$, via $\Delta x = \pi/(2k_{\max})$ -- twice as fine as the bare Nyquist limit $\pi/k_{\max}$, a safety margin against the initial estimate being slightly optimistic. Because this first estimate is only a starting point, an adaptive loop then widens the span geometrically (holding $\Delta x$ fixed) and re-solves, comparing eigenvalues against the previous, narrower grid; once the change falls below a set tolerance, the span is declared converged. This corrects for anharmonic or multi-well potentials -- the double well among them -- whose wavefunction tails extend well beyond what the HO-calibrated initial estimate predicts.
+
+\subsection{Limitations of the Method}
+Three limitations follow directly from the construction above, and bound what the pipeline can be trusted to produce. First, only roughly the lower half of any requested spectrum is numerically trustworthy: the highest-index states are the ones whose local momentum first exceeds what a fixed grid spacing can resolve, so $N_{\text{lev}}$ must always be requested with headroom beyond the levels actually needed (Section~\ref{sec:systems} quantifies this directly). Second, the method is restricted to smooth, single-valued, everywhere-finite potentials by Section~\ref{sec:dvr}-C; genuinely discontinuous potentials require a different DVR formulation entirely. Third, the dense $N\times N$ diagonalization means both memory and runtime scale unfavourably with the number of levels requested ($\mathcal{O}(N^2)$ and $\mathcal{O}(N^3)$ respectively) -- the practical ceiling on how far $N_{\text{lev}}$ can be pushed for a harder, anharmonic spectrum, and the motivation for the FFT-based alternative of Section~\ref{sec:future}.
 
 \begin{figure}[!t]
 \centering
@@ -100,7 +122,20 @@ The grid span and spacing are set automatically from the potential itself: the s
 \label{fig:pipeline}
 \end{figure}
 
-% ===================== IV. VALIDATION =====================
+% ===================== IV. NUMERICAL TECHNIQUES =====================
+\section{Numerical Techniques and Implementation Safeguards}
+\label{sec:tricks}
+Beyond the grid construction of Section~\ref{sec:dvr}, several implementation-level techniques recur throughout the codebase, each addressing a specific way a naive implementation would silently fail or become impractically slow.
+
+\textbf{Boltzmann-weight exponent shift.} Every partition-function sum in the pipeline -- the quantum $C_v(T)$, and every step of the $\xi$- and $n$-scans -- is evaluated as $w_n=\exp(-a_n+\min_n a_n)$ rather than the naive $\exp(-a_n)$, where $a_n=\beta E_n$ (or its $\xi$-scaled form). Subtracting the minimum exponent before exponentiating leaves every ratio $w_n/Z$ exactly unchanged, since it is common to every term, while preventing floating-point overflow or underflow when $a_n$ spans a wide range -- which it routinely does deep in the $\xi$-scan, where $\beta E_{\max}/\xi^2$ can be large. This is the standard log-sum-exp stability trick, applied here to every Boltzmann weight the pipeline computes.
+
+\textbf{Vectorized $n$-convergence.} Rather than recomputing the partition sum from scratch for every candidate level count $n=2,\dots,N_{\text{lev}}$, the $n$-convergence scan of Section~\ref{sec:validation} builds the weighted sums $\sum_{k\le n}w_k$, $\sum_{k\le n}w_kE_k$, and $\sum_{k\le n}w_kE_k^2$ as a single running (cumulative) sum, giving $C_v(n)$ for every $n$ in one $\mathcal{O}(N_{\text{lev}})$ pass instead of $\mathcal{O}(N_{\text{lev}}^2)$.
+
+\textbf{Partial diagonalization.} As noted in Section~\ref{sec:kinetic}, only the lowest $N_{\text{lev}}$ eigenvalues of $H$ are ever extracted, via an eigensolver that accepts an explicit index range rather than diagonalizing the full $N\times N$ matrix and discarding the unneeded upper eigenvalues -- a substantial saving whenever the grid (set by resolution, Section~\ref{sec:dvr}-D) is much larger than the number of levels actually requested.
+
+\textbf{Decoupled span and resolution.} During the adaptive grid search of Section~\ref{sec:dvr}-D, the spacing $\Delta x$ is held fixed while the span is widened, so that a span-convergence failure and a resolution-convergence failure can never be conflated with each other -- each of the two error sources identified in Section~\ref{sec:dvr}-D is varied one at a time, never both together, which is what makes the two-pass convergence check of Section~\ref{sec:validation} a clean diagnostic rather than an ambiguous one.
+
+% ===================== V. VALIDATION =====================
 \section{Validation Strategy: A Ground Truth Without Closed-Form Solutions}
 \label{sec:validation}
 The pipeline is a short chain of system-agnostic stages (Fig.~\ref{fig:pipeline}): grid configuration and DVR solve, a higher-resolution numerical reference solve, a convergence check between the two, the $\xi/n$-scan, and a final base-vs-reference $C_v(T)$ benchmark. Switching to a new potential only requires changing the potential function itself; every other stage regenerates automatically.
@@ -114,7 +149,7 @@ That gap is closed by running the identical base-vs-reference machinery on the H
 \subsection{Recognizing a Genuine Result vs.\ an Artifact}
 A second check concerns the $\xi$-scan itself, and is where the two senses of ``Schottky anomaly'' in this report must be told apart. As $\xi$ increases, $C_v(\xi)$ is expected to plateau inside the window of Eq.~\eqref{eq:xiwindow}; pushed further, it instead collapses toward zero once the scaled spectrum runs out of thermally accessible levels. That collapse can reproduce the same rise-and-fall shape as the genuine, physical Schottky anomaly of Section~\ref{sec:intro} -- a finite spectrum, whatever its origin, is capable of the same signature -- so mistaking one for the other would mean reporting a spurious enhancement instead of the real effect being searched for. The pipeline tells them apart with a companion scan over how many computed levels were actually needed to reach the plateau: convergence using only a handful of low-lying levels reflects real physics, while a result that only stabilizes near the top of the computed spectrum is a warning that truncation is shaping the curve. Only a result clearing both checks -- base-vs-reference agreement \emph{and} a genuine, non-collapsing plateau -- is reported as the classical limit or as a candidate physical Schottky feature.
 
-% ===================== V. SYSTEMS AND RESULTS =====================
+% ===================== VI. SYSTEMS AND RESULTS =====================
 \section{Systems Studied and Results}
 \label{sec:systems}
 
@@ -189,19 +224,19 @@ Separately, the DVR solver's own resolution and level-count limits were characte
 \subsection{Double Well -- Next System}
 The next system is a quartic double well, $V(x) = \tfrac14 x^4 + b\,x^3 - \tfrac12 x^2$, the first anharmonic potential in the pipeline. It is a harder test than the HO: its levels scale as $E_n\propto n^{4/3}$ rather than linearly, narrowing the plateau window of Eq.~\eqref{eq:xiwindow} (Section~\ref{sec:history}). The double well has no closed-form solution of its own, but it carries a validation route of a different, equally rigorous kind: near either minimum, any sufficiently smooth potential is locally well-approximated by a harmonic oscillator set by the local curvature, so the low-lying levels of a sufficiently deep well should closely match the already-certified HO benchmark of Section~\ref{sec:systems}-A -- an independent check without a second global closed-form answer. The double well is also the pipeline's first candidate for a genuine \emph{physical} Schottky anomaly: its central barrier supports a near-degenerate, tunnelling-split pair of levels well separated from the states above it, the textbook precondition for a real low-temperature $C_v(T)$ peak rather than a truncation artifact. This run is in progress; Section~\ref{sec:future} outlines the remaining steps.
 
-% ===================== VI. VERSION HISTORY =====================
+% ===================== VII. VERSION HISTORY =====================
 \section{Numerical Lessons This Semester}
 \label{sec:history}
 Manual grid tuning was replaced by the automatic Nyquist-based configuration of Section~\ref{sec:dvr}. A fixed padding heuristic, adequate for the HO, underestimated anharmonic wavefunction tails and was replaced with iterative span widening. Because the double well's $E_n\propto n^{4/3}$ scaling narrows its plateau window relative to the HO's linear spectrum, the $\xi$-scan step size was made more granular so the scan reliably lands inside the window before the finite-$N$ collapse of Section~\ref{sec:validation}. The DVR core was restricted to smooth potentials only, since a hard-wall discontinuity cannot be represented on any finite grid.
 
-% ===================== VII. FUTURE WORK =====================
+% ===================== VIII. FUTURE WORK =====================
 \section{Future Work}
 \label{sec:future}
 Two structural changes are planned for the summer continuation: replacing the dense $N\times N$ diagonalization (which scales as $\mathcal{O}(N^3)$) with an FFT-accelerated, matrix-free Krylov-subspace eigensolver, since the kinetic operator is diagonal in momentum space; and an adaptive grid mapping that satisfies the Nyquist criterion locally rather than globally, expected to cut the required grid points by a factor of $3$--$4$.
 
 Beyond these, the immediate next steps are to: (i) complete and quantitatively characterize the double-well run, including the symmetric-vs-asymmetric comparison discussed with the supervisor; (ii) carry out the near-minimum harmonic-limit check of Section~\ref{sec:systems}-B explicitly, and test whether the tunnelling doublet produces a genuine, $n_{\text{conv}}$-verified Schottky peak; (iii) compare the resulting $C_v(T)$ against literature values for comparable potentials, as a further external cross-check; and (iv), motivated by Section~\ref{sec:intro}, scan systematically across potentials for a genuine Schottky-driven enhancement -- and, if one is found, quantify its efficiency against the classical limit, test whether it generalizes, and propose a concrete experimental realization.
 
-% ===================== VIII. CONCLUSION =====================
+% ===================== IX. CONCLUSION =====================
 \section{Conclusion}
 This semester's work built and validated the numerical groundwork for a longer-term search for quantum-enhanced heat machine performance: a pipeline that computes $C_v(T)$, quantum and classical, for any smooth potential, without depending on a closed-form solution for its own internal ground truth. That methodology was certified, once, against the HO, and reproduces it to machine precision -- evidence it can be trusted once no such answer exists to compare against. The same pipeline is now running, unmodified beyond the potential definition, on the anharmonic double well, whose near-minimum harmonic limit gives a further consistency check and whose tunnelling-split doublet is the first candidate for a genuine physical Schottky anomaly. Distinguishing that genuine enhancement from a numerical look-alike is exactly the distinction this project's longer-term goal depends on, and it is what this semester's validation machinery is designed to do.
 
