@@ -79,16 +79,8 @@ Following \cite{gelbwaser2018} (Eq.~S7 therein), the energy levels of a potentia
 \end{equation}
 For systems without a closed-form $E_n(\hbar_{\text{eff}})$, Eq.~\eqref{eq:scaling} is realized by scaling \emph{both} temperature and potential by $\xi^2$, i.e. evaluating Eq.~\eqref{eq:cv_general} with $E_n \to E_n/\xi^2$.
 
-\subsubsection{Why this is really $\hbar\to0$: a semiclassical picture}
-The Bohr--Sommerfeld quantization rule states that the number of bound levels below energy $E$ is, to leading order, the classical phase-space area enclosed by the constant-energy orbit, measured in units of $2\pi\hbar$:
-\begin{equation}
-n(E) \;\approx\; \frac{1}{2\pi\hbar}\oint_{H(x,p)=E} dx\,dp .
-\label{eq:bohrsommerfeld}
-\end{equation}
-The classical orbit itself -- and hence the phase-space area in Eq.~\eqref{eq:bohrsommerfeld} -- does not depend on $\hbar$; only the \emph{size of the cell} used to count states does. Shrinking $\hbar\to\hbar/\xi$ therefore packs $\xi$ times as many levels into the same energy window, i.e. it shrinks the local level spacing as $\Delta E(\xi)\sim\Delta E/\xi$ while leaving the classically allowed energy range essentially unchanged. This is the precise sense in which increasing $\xi$ is a controlled, numerically realizable version of $\hbar\to0$.
-
 \subsubsection{Valid window for $\xi$}
-Any numerical spectrum is truncated at a finite highest computed level $E_{\max}$, so the plateau in $C_v(\xi)$ can only be trusted inside a finite window. For the level spacing to be negligible on the scale of $k_BT$ -- the condition for the sum over states to look like the continuous classical integral -- Eq.~\eqref{eq:bohrsommerfeld} requires
+Any numerical spectrum is truncated at a finite highest computed level $E_{\max}$, so the plateau in $C_v(\xi)$ can only be trusted inside a finite window. For the level spacing to be negligible on the scale of $k_BT$ -- the condition for the sum over states to look like the continuous classical integral -- the semiclassical continuum condition requires
 \begin{equation}
 \xi \gg \sqrt{\beta\,\Delta E}.
 \label{eq:xilower}
@@ -103,7 +95,7 @@ Combining Eqs.~\eqref{eq:xilower}--\eqref{eq:xiupper} gives the plateau window a
 \sqrt{\beta\,\Delta E} \;\ll\; \xi \;\ll\; \sqrt{\beta\,E_{\max}}.
 \label{eq:xiwindow}
 \end{equation}
-The lower bound is the semiclassical continuum condition of Eq.~\eqref{eq:bohrsommerfeld}; the upper bound is a purely numerical artifact of working with a finite basis (Section~\ref{sec:schottky} returns to this distinction).
+The lower bound is the semiclassical continuum condition introduced above; the upper bound is a purely numerical artifact of working with a finite basis (Section~\ref{sec:schottky} returns to this distinction).
 
 \subsection{Analytical Benchmarks}
 Two systems with closed-form solutions anchor the numerical pipeline and illustrate the correspondence principle explicitly.
@@ -154,11 +146,11 @@ Any calculation on a finite grid carries two logically distinct error sources: a
 
 The above physics is realized as a short chain of independent, system-agnostic stages (Fig.~\ref{fig:pipeline}): a grid-configuration and DVR-solve stage; a higher-resolution reference solve used as numerical ground truth for any potential (replacing the analytical HO formula once a system has no closed form); the resolution/boundary convergence check of Section~\ref{sec:dvr}; the $\xi/n$-convergence scan of Section~\ref{sec:xiconv}; and a final benchmark comparing base- and reference-grid $C_v(T)$. Because every stage after the grid configuration is written in terms of a generic energy array rather than a specific potential, switching to a new system requires changing only the potential function itself -- every other stage, including the ground-truth reference, regenerates automatically.
 
-Table~\ref{tab:params} lists the numerical control parameters governing the $\xi$/$n$-scan and the temperature sweep, using the notation introduced in Section~\ref{sec:xiconv}.
+Table~\ref{tab:params} lists the numerical control parameters governing the $\xi$/$n$-scan and the temperature sweep, using the notation introduced in Section~\ref{sec:xiconv}. These are the settings the pipeline is presently configured with -- the same values under which the double well of Section~\ref{sec:systems}-B is now being run; several of them (notably $\text{mult}$) were tightened over the course of the semester specifically to handle the double well's narrower plateau window (Section~\ref{sec:history}), so they are not necessarily identical to the settings in force when the earlier HO benchmark of Section~\ref{sec:results} was generated.
 
 \begin{table}[!t]
 \centering
-\caption{Numerical Control Parameters of the $\xi$/$n$-Scan (Current Run)}
+\caption{Numerical Control Parameters of the $\xi$/$n$-Scan (Current Pipeline Configuration)}
 \label{tab:params}
 \footnotesize
 \begin{tabular}{@{}>{$}l<{$}>{\raggedright\arraybackslash}p{1.5cm}>{\raggedright\arraybackslash}p{4.35cm}@{}}
@@ -209,7 +201,7 @@ A second, independent scan asks how many of the computed levels were actually re
 \label{sec:systems}
 
 \subsection{Harmonic Oscillator -- Validation Case}
-The HO is the reference system used to validate the numerical method against Eq.~\eqref{eq:cvho} before trusting the same pipeline on systems with no closed-form answer. Figures~\ref{fig:ho_energy_comparison}--\ref{fig:xi_convergence} show the full set of validation diagnostics produced so far, all for $N_{\text{lev}}=500$.
+The HO is the reference system used to validate the numerical method against Eq.~\eqref{eq:cvho} before trusting the same pipeline on systems with no closed-form answer. Figures~\ref{fig:ho_energy_comparison}--\ref{fig:n_convergence} show the full set of validation diagnostics produced so far, all for $N_{\text{lev}}=500$.
 
 \begin{figure}[!t]
 \centering
@@ -224,21 +216,6 @@ The HO is the reference system used to validate the numerical method against Eq.
 \caption{Relative error between base-grid and reference-grid energy levels vs. state index $n$. The error is already at the $10^{-13}$--$10^{-12}$ level for the very lowest states and settles to a flat $\sim\!1.5\times10^{-13}$ plateau by $n\approx100$ -- consistent with both grids being converged to machine precision, so that only floating-point round-off remains.}
 \label{fig:ho_error_vs_n}
 \end{figure}
-
-\subsection{Symmetric / Asymmetric Double Well -- Current System}
-The potential currently under study is the quartic double well
-\begin{equation}
-V(x) = \frac14 x^4 + b\,x^3 - \frac12 x^2,
-\label{eq:doublewell}
-\end{equation}
-with $b=-0.5$ in the active run; setting $b=0$ recovers the purely symmetric double well. The $b\neq0$ term probes the asymmetric case discussed with the supervisor (Meeting~8): comparing the near-well region of a deep asymmetric well against the symmetric HO result as an additional sanity check. This is the first anharmonic potential in the pipeline, and it is a meaningfully harder test than the HO: its levels scale as $E_n\propto n^{4/3}$ rather than linearly, so the level spacing $\Delta E(E)$ shrinks with energy far more slowly, which narrows the plateau window of Eq.~\eqref{eq:xiwindow} (Section~\ref{sec:history}). Numerical results for this potential are still being produced and are not yet included in this report (Section~\ref{sec:future}).
-
-The double well also has a genuine two-scale spectrum: a finite central barrier supports a near-degenerate pair of levels below the barrier, split by quantum tunnelling, separated by a much larger gap from the states above it. In the WKB approximation, the size of this splitting is exponentially small in the barrier's classical action,
-\begin{equation}
-\Delta_{\text{tunnel}} \sim \hbar\omega_0\,\exp\!\left(-\frac{1}{\hbar}\int_{-a}^{a}\!\sqrt{2m\big(V(x)-E_0\big)}\;dx\right),
-\label{eq:wkbsplitting}
-\end{equation}
-where $\pm a$ are the inner classical turning points at the ground-state energy $E_0$ of a single well. Equation~\eqref{eq:wkbsplitting} is the physical origin of the Schottky discussion in Section~\ref{sec:schottky}: it sets the temperature scale, $k_BT_{\text{peak}}\sim\Delta_{\text{tunnel}}$, at which a genuine low-temperature feature in $C_v(T)$ -- and a candidate quantum-over-classical enhancement of the kind motivating this project (Section~\ref{sec:intro}) -- is expected.
 
 \begin{figure}[!t]
 \centering
@@ -260,6 +237,21 @@ where $\pm a$ are the inner classical turning points at the ground-state energy 
 \caption{$n$-convergence diagnostic at the hardest temperature in the sweep, $k_BT/\hbar\omega=2.50$. $C_v(n)$ rises smoothly and is converged (to within $\varepsilon_n$) at $n_{\text{conv}}=397$ out of the 500 computed levels, with $C_v/k_B=0.995$ at that point.}
 \label{fig:n_convergence}
 \end{figure}
+
+\subsection{Symmetric / Asymmetric Double Well -- Current System}
+The potential currently under study is the quartic double well
+\begin{equation}
+V(x) = \frac14 x^4 + b\,x^3 - \frac12 x^2,
+\label{eq:doublewell}
+\end{equation}
+with $b=-0.5$ in the active run; setting $b=0$ recovers the purely symmetric double well. The $b\neq0$ term probes the asymmetric case discussed with the supervisor (Meeting~8): comparing the near-well region of a deep asymmetric well against the symmetric HO result as an additional sanity check. This is the first anharmonic potential in the pipeline, and it is a meaningfully harder test than the HO: its levels scale as $E_n\propto n^{4/3}$ rather than linearly, so the level spacing $\Delta E(E)$ shrinks with energy far more slowly, which narrows the plateau window of Eq.~\eqref{eq:xiwindow} (Section~\ref{sec:history}). Numerical results for this potential are still being produced and are not yet included in this report (Section~\ref{sec:future}).
+
+The double well also has a genuine two-scale spectrum: a finite central barrier supports a near-degenerate pair of levels below the barrier, split by quantum tunnelling, separated by a much larger gap from the states above it. In the WKB approximation, the size of this splitting is exponentially small in the barrier's classical action,
+\begin{equation}
+\Delta_{\text{tunnel}} \sim \hbar\omega_0\,\exp\!\left(-\frac{1}{\hbar}\int_{-a}^{a}\!\sqrt{2m\big(V(x)-E_0\big)}\;dx\right),
+\label{eq:wkbsplitting}
+\end{equation}
+where $\pm a$ are the inner classical turning points at the ground-state energy $E_0$ of a single well. Equation~\eqref{eq:wkbsplitting} is the physical origin of the Schottky discussion in Section~\ref{sec:schottky}: it sets the temperature scale, $k_BT_{\text{peak}}\sim\Delta_{\text{tunnel}}$, at which a genuine low-temperature feature in $C_v(T)$ -- and a candidate quantum-over-classical enhancement of the kind motivating this project (Section~\ref{sec:intro}) -- is expected.
 
 % ===================== VII. SCHOTTKY =====================
 \section{The Schottky Anomaly and Its Relevance to This Project}
@@ -357,7 +349,7 @@ The current solver builds a dense $N\times N$ Hamiltonian and diagonalizes it di
 \subsubsection{Adaptive spatial grid mapping}
 The uniform sinc-DVR grid is inefficient for potentials whose wavefunctions oscillate rapidly near the well bottom and decay slowly in the tails: the fixed spacing must satisfy the Nyquist criterion at the point of \emph{highest} local momentum, oversampling everywhere else. An analytical coordinate map from a uniform computational coordinate rescales the local grid spacing, compressing points where the local de Broglie wavelength is short and stretching them in the classically forbidden tails. Satisfying the Nyquist criterion locally rather than globally is expected to reduce the required grid points by a factor of $3$--$4$.
 
-Beyond these two structural changes, the immediate next steps are to (i) complete and quantitatively characterize the double-well run of Section~\ref{sec:systems}, including the symmetric-vs-asymmetric comparison from Meeting~8, and produce the corresponding figures (potential shape, $C_v(T)$ summary) using the same plotting tools now in place for the HO; (ii) test the WKB prediction of Eq.~\eqref{eq:wkbsplitting} against the low-$T$ behavior of the numerical $C_v(T)$, using the $n_{\text{conv}}$ diagnostic to rule out a truncation artifact; and (iii), motivated by Section~\ref{sec:intro}, begin systematically scanning across potentials for temperature windows where quantum $C_v$ exceeds classical $C_v$, as a first step toward the project's longer-term heat-machine question.
+Beyond these two structural changes, the immediate next steps are to (i) complete and quantitatively characterize the double-well run of Section~\ref{sec:systems}, including the symmetric-vs-asymmetric comparison from Meeting~8, and produce the corresponding figures (potential shape, $C_v(T)$ summary) using the same plotting tools now in place for the HO; (ii) test the WKB prediction of Eq.~\eqref{eq:wkbsplitting} against the low-$T$ behavior of the numerical $C_v(T)$, using the $n_{\text{conv}}$ diagnostic to rule out a truncation artifact; (iii) validate the double-well pipeline against its own harmonic limit, as proposed in Meeting~3: continuously reduce the quartic and cubic terms of Eq.~\eqref{eq:doublewell} toward zero and confirm that the computed spectrum and $C_v(T)$ converge smoothly onto the HO benchmark of Section~\ref{sec:results}, giving an internal consistency check that is independent of the WKB estimate; (iv) compare the resulting $C_v(T)$ against literature values for comparable model potentials, as discussed in Meeting~8, to cross-check the pipeline against results obtained by other methods; and (v), motivated by Section~\ref{sec:intro}, begin systematically scanning across potentials for temperature windows where quantum $C_v$ exceeds classical $C_v$, as a first step toward the project's longer-term heat-machine question.
 
 % ===================== XI. CONCLUSION =====================
 \section{Conclusion}
