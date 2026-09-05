@@ -1,0 +1,516 @@
+\documentclass{article}
+
+% Language setting
+\usepackage[english]{babel}
+
+% --- Packages ---
+\usepackage[utf8]{inputenc}
+\usepackage[margin=1in]{geometry} % Professional 1-inch margins
+\usepackage{amsmath, amssymb, amsfonts, amsthm, mathtools} % For advanced math symbols/LaTeX equations
+\usepackage{physics}
+\usepackage{enumitem} % For custom bullet points and lists
+\usepackage{fancyhdr} % For custom headers and footers
+\usepackage{graphicx} % For inserting plots/images
+\usepackage{booktabs} % For professional tables
+\usepackage[most]{tcolorbox} % For creating beautiful boxes
+\usepackage[colorlinks=true, allcolors=blue]{hyperref}
+\usepackage{titlesec} 
+
+\titlelabel{Part \thetitle:\quad}
+
+% Formula numbering by section
+\numberwithin{equation}{subsection}
+
+% Define a custom style for your solutions
+\newtcolorbox{solutionbox}[2][]{
+    colback=lightgray!20,        
+    colframe=black,    
+    arc=3pt,             
+    outer arc=3pt,
+    boxrule=0.8pt,       
+    left=2mm, right=2mm, top=2mm, bottom=2mm, 
+    breakable,           
+    title={#2}, % The second argument becomes the title text            
+    colbacktitle=gray!20,
+    coltitle=black,
+    fonttitle=\bfseries,
+    attach title to upper=\quad,
+    #1 % This line lets you pass raw options like width directly!
+}
+
+% --- Header & Footer Configuration ---
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{\small 00540367: Research Project 1}
+\rhead{\small Technion - IIT}
+\lfoot{\small Spring 2026 | Semester 6}
+\rfoot{\small Page \thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0.4pt}
+
+\begin{document}
+
+% --- Course Title & Assignment Header ---
+\begin{center}
+    {\large \bf Technion -- Israel Institute of Technology} \\
+    {\large Department of Chemical Engineering} \\
+    \vspace{4mm}
+    {\Large \bf Quantum Heat Machines Research Project} \\
+    \vspace{3mm}
+    \begin{solutionbox}[width=0.9\textwidth]{}
+        \textbf{Supervisor:} Dr. David Gelbwaser-Klimovsky \hfill \textbf{Begin Date:} May 12, 2026 \\
+        \textbf{Student Name:} Nadav Jean \hfill \textbf{Student ID:} 
+    \end{solutionbox}
+\end{center}
+
+\hrule height 1pt
+\vspace{4mm}
+
+\begin{abstract}
+Some notes on meetings with David, as well as some of the derivations for the Python simulations. 
+\end{abstract}
+
+\section{Meetings Summaries}
+\subsection*{Meeting No. 2 (12.05.26)}
+\begin{enumerate}[label=\textbf{\Alph*.}]
+    
+\item Went over the derivation for the scaling factor using the energy levels (as seen in \cite{GelbwaserKlimovsky2018}, equation S7): 
+
+\begin{equation}
+\frac{E_n (\hbar_{eff}=\hbar, \xi^2 V(x))}{\xi^2} =E_n(\hbar_{eff}=\frac{\hbar}{\xi}, V(x))   
+\end{equation}
+
+\item When inputting the scaling factor where one has the analytical solution for $E_n$, one can simply input $\hbar_{eff}=\frac{\hbar}{\xi}$ into the energy levels
+
+\item For systems with NO analytical solutions of $E_n$, one must use equation (1) for the scaling, which results in the scaling of the potential as well as the temperature by a factor of $\xi^2$. This corresponds to a scaling of $\hbar \to 0$
+
+\item The reason for this is, these are parameters that we are able to change, unlike $\hbar$, which is a universal constant
+
+\item We also talked about the convergence to the classical limit. We have 2 parameters: number of energy levels (n) and the scaling factor ($\xi$). For convergence, we must make sure that we have enough energy levels for a SPECIFIC $\xi$ so that we converge to a single value. After that we increase the $\xi$ to make sure that we keep a constant value, this shows us that we reached the classical limit we want.
+
+\item Another parameter we have is the max temp we want to check. For the quantum system, in most system (with no dependence on the temp) we want to see the classical limit at high temps. To make sure we get there, we agreed upon the value of:
+\begin{equation}
+    \frac{k_BT_{max}}{\Delta E}\approx10 \Rightarrow T_{max} \approx 10\cdot\frac{\Delta E}{k_B}
+\end{equation}
+\end{enumerate}
+
+\subsection*{Meeting No. 3 (27.05.26)}
+\begin{enumerate}[label=\textbf{\Alph*.}]
+    \item Revised the idea of how the scaling factor works. The scaling is done ONLY by scaling the temperature and potential, not the energy levels. The scaling of the energy levels is an effect of scaling the potential, from which we receive equation (1.1.1).
+
+    \item Went over the code for finding the scaling factor at a specific temperature. Need to revise the graph that shows that the $C_v$ is at a plateau for increasing values of the scaling factor. Need to lengthen the $\xi$ values until the $C_v$ drops to zero, and then take the mean $\xi$ of the plateau.
+
+    \item Discussed a 'sanity' check that can be done for equation (2.2.8) for different potentials. Input the scaling factor using this equation, and then deriving it again using equation (1.1.1). 
+
+    \item Another future feature we discussed is checking if we get the same convergence for similar potentials. (e.g. for a double well, lower the middle barrier until we get a harmonic potential and check if the results are similar)
+
+    \item Remember to include a proof for the exponent shift in the code that shows that it doesn't change the result.
+\end{enumerate}
+
+\subsection*{Meeting No. 4 (04.06.26)}
+\begin{enumerate}[label=\textbf{\Alph*.}]
+    \item Presented the plateau for the $\xi$ converged value. Box potential was good, HO needs more work (the classical limit at lower temperatures was not reached.
+
+    \item Task 1: finish he classical limit numerical approximation for the HO
+
+    \item Task 2: Begin developing a DBR algorithm for finding the energy levels of a system. Begin with HO (where levels are known and continue to systems with no closed form. 
+
+    \item Formalize the code algorithm in this summery (including the future DBR one)
+
+    \item Research more on the DBR algorithm to see if there is a better way than brute forcing the calculation of the eigen values (energy levels)
+
+    \item Research some more on alternative methods for DBR that are more modern and efficient (PINNs for example? / maybe there is already a known algorithm).
+
+    \item Remember that next meeting is on the week of (21-25/06).
+\end{enumerate}
+
+\subsection*{Meeting No. 5 (24.06.26)}
+\begin{enumerate}[label=\textbf{\Alph*.}]
+    \item The DVR algorithm I created needs to be modified just for smooth potentials (no 'hard walls') for simplicity. We will not work with problematic potentials like the box potential.
+    \item The dual well algorithm is still not relevant until I am 100\% sure that the numerical algorithm is precise according to the analytical HO.
+    \item To reduce the runtime of the DVR algorithm, an option is to use truncated values of universal constants to see if it affects runtime.
+    \item A runtime of up to 30 mins for this algorithm is perfectly acceptable, no need to go to extreme optimization to reduce it for under that.
+    \item The graph of the HO was acting strangely at low T (not approaching 0 as expected). Later I tweaked it and found that the T range was not large enough, reminder to make sure that our T range is sufficient to account for all of the right physics.
+    \item Reread the DVR article again and make sure you are fluent in the algorithm and all of the tips and tricks stated there.
+    \item For next meeting: graph the analytical and numerical HO next to each other on the same graph. Find the lowest resolution where they diverge. Calculate analytically the energy levels and compare them to the numerical result. Find the MSE and the variance between the two results. 
+\end{enumerate}
+
+\subsection*{Meeting No. 6 (01.07.26)}
+\begin{enumerate}[label=\textbf{\Alph*.}]
+    \item To approximate the analytical solution, we must create a grid for the DVR that will be bigger and denser, so that we see if any of the physics was missing form original grid. If energy levels do not change (up to a tolarence), we have created a good grid. Example for change in grid: $\tilde L \rightarrow 2L, \tilde{\Delta x} \rightarrow \frac{\Delta x}{2} $. Can be done in single piece of code.
+    
+    \item Try to draw the potential point wise using the grid and see if it cane be drawn. If yes, good starting point for grid spacing and size.
+    
+    \item Rule of Thumb: more dense fluctuations in potential $\rightarrow$ tighter grid (smaller $\Delta x$). 
+    More spread out peaks $\rightarrow$ larger grid (larger L).
+    
+    \item Use the more precise ('analytical') DVR to calculate the Cv graph again, and compare it to the 'numerical' DVR. If you can't tell difference by eye, that is converged enough (need to find a numerical tolerance for that).
+    
+    \item Use the more precise ('analytical') DVR to calculate the Cv \textbf{classical} graph again. Similar to the quantum Cv, we check convergence by eye. This probably will need a more 'analytic' DVR grid because the classical limit needs more energy levels to converge.
+    
+    \item The convergence check for the classical limit is a better indication for true convergance (because of the more energy levels), but \textbf{both} quantum and classical Cv convergence must be checked.
+\end{enumerate}
+
+\subsection*{Meeting No. 7 (15.07.26)}
+\begin{enumerate}[label=\textbf{\Alph*.}]
+    \item Went over the revised code, David wants to see the graph of the accuracy of the DVR vs n levels to the point where the error gets too great
+    \item Went over the relative error problem of the Cv. For now, leave as is, result of inf gives indication the Cv really does approach 0.
+    \item For next time: reorganize the code and begin playing around with different potentials.
+    \item Also, check with Prof Alon Dana what we need to hand in for evaluation and until when does David need to give us a grade.
+\end{enumerate}
+
+\subsection*{Meeting No. 8 (22.07.26)}
+\begin{enumerate}[label=\textbf{\Alph*.}]
+    \item Discussed the new symmetric double well I calculated. Should try and verify against asymmetric double well, where the first part of the deeper well should be similar to HO. Verify graphically (2 plots on top of each other) and numerically.
+    \item Try and find Cv computations in the literature for other potentials as well as energy level spacing.
+    \item Include energy level spacing in the graph that shows En vs n. 
+    \item Now we begin computing Cv for different potentials, where we search for a potential that behaves in a way that the quantum Cv is \textbf{higher} than the classical Cv.
+    \item Edit the code so that the error graphs are saved in a file for error verification (and not plt.show).
+    \item Also, edit the code so that changing to higher n levels is easy to do without changing the grid, and aslo add an option to include multiple Cv plots in a single graph (for comparison).
+    \item Is there a connection between energy level diff and the Schottkey Anomaly?
+\end{enumerate}
+\section{Systems of different potentials}
+\subsection{Harmonic Oscillator}
+\begin{enumerate}[label=\textbf{\Alph*.}]
+\item{Quantum Limit}
+
+    \begin{itemize}
+        \item \underline{Energy Levels-} We have an analytical expression for the energy levels. 
+        \begin{equation}
+            E_n^{HO}= \hbar\omega \left( n+\frac{1}{2} \right)   \hspace{0.5cm} ;n \in \mathbb{N}_0
+        \end{equation}
+    
+        \item \underline{Partition Function-} 
+        \begin{equation}
+            Z^{HO} = \sum_{n=0}^{\infty}e^{-\beta E_n} = \sum_{n=0}^{\infty}e^{-\beta \hbar\omega \left( n+\frac{1}{2} \right)} =e^{-\frac{\beta \hbar}{2}} \cdot \sum_{n=0}^{\infty} \left( e^{-\beta \hbar \omega}\right)^n
+        \end{equation}
+    
+        \bigskip
+    
+        Notice that $\beta \hbar \omega > 1 \Rightarrow |e^{-\beta \hbar \omega}| < 1$, and so we have a converging geometric series:
+        \begin{equation}
+            Z^{HO} = \frac{e^ {- \frac{\beta \hbar \omega}{2} } }{1-e^{-\beta \hbar \omega} }
+        \end{equation}
+    
+        \bigskip
+    
+        Using the known identity for the internal energy expected value:
+        \begin{equation}
+        \begin{split}        
+            \expval{E}^{HO} &= -\frac{\partial}{\partial \beta}ln(Z^{HO}) =
+            -\frac{\partial}{\partial \beta}ln \left( \frac{e^ {- \frac{\beta \hbar \omega}{2} } }{1-e^{-\beta \hbar \omega} } \right) 
+            \\ 
+            &= -\frac{\partial}{\partial \beta} \left[ -\frac{\beta \hbar \omega}{2} - ln \left( 1-e^{-\beta \hbar \omega} \right) \right] \\ 
+            &= - \left[ \frac{\hbar \omega}{2} - \frac{1}{1-e^{-\beta \hbar \omega} }\left( \hbar \omega e^{- \beta \hbar \omega} \right) \right] 
+            \\ 
+            &= \frac{\hbar \omega}{2} + \frac{\hbar \omega}{ \left(1-e^{-\beta \hbar \omega} \right) e^{\beta \hbar \omega} } 
+            \\ 
+            &= \frac{\hbar \omega}{2} + \frac{\hbar \omega}{e^{\beta \hbar \omega} - 1}
+        \end{split}
+        \end{equation}
+    
+        \item \underline{Heat Capacity-} We can compute that:
+        \begin{equation}
+        \left\{
+        \begin{aligned}
+            &\frac{\partial \beta}{\partial T} = \frac{\partial}{\partial T} \left( \frac{1}{k_B T} \right) = -\frac{1}{k_B T^2} = -k_B \beta^2 \\
+            &\frac{\partial \expval{E} }{\partial \beta} = \frac{\partial}{\partial \beta} \left(\frac{\hbar \omega}{2} +\frac{\hbar \omega}{e^{\beta \hbar \omega} -1} \right) = - \frac{(\hbar \omega)^2e^{\beta \hbar \omega} }{\left( e^{\beta \hbar \omega} - 1 \right)^2}
+        \end{aligned}
+        \right.
+        \end{equation}
+    
+        Using the identity for the Heat Capacity with the chain rule, we find that:
+        \begin{equation}
+            C_v^{HO} = \frac{\partial \expval{E} }{\partial T} = \frac{\partial \expval{E} }{\partial \beta} \frac{\partial \beta}{\partial T} = k_B (\beta \hbar \omega)^2 \frac{e^{\beta \hbar \omega} }{ \left( e^{\beta \hbar \omega} - 1 \right)^2}
+        \end{equation}
+    
+        A similar result can be derived using hyperbolic identities:
+        \begin{equation}
+            C_v^{HO} = k_B (\beta \hbar \omega)^2 \frac{e^{\beta \hbar \omega} }{ \left( e^{\beta \hbar \omega} - 1 \right)^2} \cdot \frac{e^{- \beta \hbar \omega} }{e^{- \beta \hbar \omega}} = \frac{k_B (\beta \hbar \omega)^2 } {\left( e^{\frac{\beta \hbar \omega}{2} } - e^{- \frac{\beta \hbar \omega}{2} } \right)^2 }
+        \end{equation}
+        
+        Using the hyperbolic identity:   
+        \begin{equation*}
+        \begin{split}
+            sinh(x) &= \frac{e^x-e^{-x} }{2} 
+            \\
+            2sinh(x) &= e^x-e^{-x} 
+            \\
+            4sinh^2(x) &= \left( e^x-e^{-x} \right)^2 
+            \\
+            \frac{1}{4sinh^4(x)} &= \frac{1}{4}csc^2(x)=\frac{1}{ \left( e^x -e^{-x} \right)^2 }
+        \end{split}
+        \end{equation*}
+    
+        We find that:
+        \begin{equation}
+            C_v^{HO} = k_B \cdot e^{\beta \hbar \omega} \left( \frac{\beta \hbar \omega}{ e^{\beta \hbar \omega} - 1} \right)^2 =\frac{1}{4}k_B \left[ \beta \hbar \omega \cdot csch \left( \frac{\beta \hbar \omega}{2} \right) \right]^2
+        \end{equation}
+        
+    \end{itemize}
+    
+\item{Classical Limit}
+    
+    \begin{enumerate}
+        \item \underline{Equipartition Theorem-} (for high T [$k_BT \gg \Delta E$] + Thermal equilibrium)
+        The Hamiltonian for the HO is given by $H = \frac{p^2}{2m} + \frac{1}{2} m \omega^2 x^2$. As can be seen in the Hamiltonian, there are 2 quadratic terms ($p^2$ and $x^2$) and each contributes $\frac{1}{2}k_BT$ to the total energy. 
+        
+        Therefor we get:
+        
+        \begin{equation}
+        \begin{split}
+            \expval{E} &= \frac{1}{2}k_BT + \frac{1}{2}k_BT = k_BT 
+            \\
+            C_v^{HO} &= \frac{\partial \expval{E}}{\partial T} = k_B 
+        \end{split}
+        \end{equation}
+        
+        \item \underline{Scaling Factor-} As was shown in \cite{GelbwaserKlimovsky2018}, we can reach a classical limit by scaling $\hbar \rightarrow 0$. This can be done by a scaling factor, $\xi$, which in this case where we have an analytic expression for the energy levels can be easily computed:
+        
+        \begin{equation}
+            C_v^{HO} = k_B \cdot e^{\beta \frac{\hbar}{\xi} \omega} \left( \frac{\beta \frac{\hbar}{\xi} \omega}{ e^{\beta \frac{\hbar}{\xi} \omega} - 1} \right)^2
+        \end{equation}
+        
+        By taking the limit of $\xi\rightarrow \infty$, we can compute the classical limit of this system:
+        
+        \begin{equation}
+        \begin{split}
+            C_v^{Classic \hspace{1mm} HO} &= \lim_{\xi\rightarrow\infty} \left[ k_B \cdot e^{\beta \frac{\hbar}{\xi} \omega} \left( \frac{\beta \frac{\hbar}{\xi} \omega}{ e^{\beta \frac{\hbar}{\xi} \omega} - 1} \right)^2 \right] 
+            \\
+            &=  k_B \cdot \left[ \lim_{\xi\rightarrow\infty} e^{\beta \frac{\hbar}{\xi} \omega} \right] \cdot \left[ \lim_{\xi\rightarrow\infty} \left(  \frac{\beta \frac{\hbar}{\xi} \omega}{ e^{\beta \frac{\hbar}{\xi} \omega} - 1} \right) \right]^2  
+            \\
+            &\overset{L'H\hat{o}pital}{=} k_B \cdot 1 \cdot \left[ \lim_{\xi\rightarrow\infty} \left(  \frac{- \beta \frac{\hbar}{\xi^2} \omega}{- \beta \frac{\hbar}{\xi^2} \omega \cdot e^{\beta \frac{\hbar}{\xi} \omega} } \right) \right]^2  
+            \\
+            &=  k_B \cdot \left[ \lim_{\xi\rightarrow\infty} \left(  \frac{1}{e^{\beta \frac{\hbar}{\xi} \omega} } \right) \right]^2  
+            \\
+            &= k_B
+        \end{split}
+        \end{equation}
+
+    \end{enumerate}
+\end{enumerate}
+
+\subsection{Box Potential}
+\begin{enumerate}
+\item{Quantum Limit}
+
+    \begin{itemize}
+        \item \underline{Energy Levels-} We have an analytical solution for the energy levels here as well:
+        
+        \begin{equation}
+            E_n^{Box}=\frac{n^2 \pi^2 \hbar^2}{2mL^2} = n^2E_g \hspace{0.5cm} ;n \in \mathbb{N}_1
+        \end{equation}
+    
+        \item \underline{Partition Function-} 
+        \begin{equation}
+            Z^{Box} = \sum_{n=1}^{\infty}e^{-\beta E_n} = \sum_{n=1}^{\infty}e^{-\beta n^2E_g}
+        \end{equation}
+        
+        Here we do not have a closed form for this infinite sum, and so a numerical approximation is needed. We do this by truncating the sum at a finite number of levels, because the sum converges very quickly this is sufficiently accurate for our purposes.
+    
+        \item \underline{Heat Capacity-} Using the identity from statistical mechanics:
+        
+        \begin{equation}
+            \expval{E}= - \frac{\partial ln(Z)}{\partial \beta} = -\frac{1}{Z}\frac{\partial Z}{\partial \beta} = -\frac{1}{Z} \frac{\partial}{\partial \beta} \left( \sum_{n=1}^{\infty}e^{-\beta E_n} \right) = \frac{1}{Z} \sum_{n=1}^\infty E_ne^{- \beta E_n}
+        \end{equation}
+        
+        This is the first moment of the energy. The second moment will be:
+        
+        \begin{equation}
+            \expval{E^2} = \frac{1}{Z} \sum_{n=1}^\infty E_n^2e^{- \beta E_n} 
+        \end{equation}
+        
+        Using the two moments and equation (2.1.5) we can calculate the heat capacity:
+        
+        \begin{equation}
+        \begin{split}
+            C_v &= \frac{\partial \expval{E} }{\partial T} = 
+            %
+            \frac{\partial \expval{E} }{\partial \beta} \frac{\partial \beta}{\partial T} \\ &= 
+            %
+            -k_B \beta^2 \cdot \frac{\partial}{\partial \beta} \left( \frac{\sum_{n=1}^\infty E_n e^{-\beta E_n}}{Z} \right) \\ &= 
+            %
+            -k_B \beta^2 \cdot \frac{\left( -\sum_{n=1}^\infty E_n^2 e^{-\beta E_n} \right)Z - \left( \sum_{n=1}^\infty E_n e^{-\beta E_n} \right) \left( -\sum_{n=1}^\infty E_ne^{-\beta E_n} \right)}{Z^2} \\ &=
+            %
+            -k_B \beta^2 \cdot \left[ -\frac{\sum_{n=1}^\infty E_n^2 e^{-\beta E_n} }{Z} + \left( \frac{\sum_{n=1}^\infty E_n e^{-\beta E_n} }{Z} \right)^2 \right]
+            \\ &=
+            %
+            k_B \beta^2 (\expval{E^2} - \expval{E}^2) = k_B \beta^2 \cdot Var(E)
+        \end{split}
+        \end{equation}
+        
+        We can see here that we arrived at a derivation for the Heat Capacity using the variance of the energy of the system, which can be calculated numerically by truncating the infinite sum to a finite energy level.
+    
+    \end{itemize}
+    
+\item{Classical Limit}
+
+    \begin{enumerate}
+    
+        \item \underline{Equipartition Theorem-} (for high T [$k_BT \gg \Delta E$] + Thermal equilibrium)
+        The Hamiltonian for the Box potential is given by $H = \frac{p^2}{2m} + \left\{ \substack{0 \hspace{0.7cm} ;0<x<L \\ \infty \hspace{0.3cm} ;otherwise} \right.$. As can be seen in the Hamiltonian, there is a single quadratic term ($p^2$) which contributes $\frac{1}{2}k_BT$ to the total energy. 
+        
+        Therefore we get:
+        
+        \begin{equation}
+        \begin{split}
+            \expval{E} &= \frac{1}{2}k_BT 
+            \\
+            C_v^{Box} &= \frac{\partial \expval{E}}{\partial T} = \frac{1}{2}k_B 
+        \end{split}
+        \end{equation}
+        
+        \item \underline{Scaling Factor-} As was shown in \cite{GelbwaserKlimovsky2018}, we can reach a classical limit by scaling $\hbar \rightarrow 0$, using the scaling factor $\xi$. Here we will do this by scaling $T \rightarrow \xi^2 T, \hspace{0.5mm}V(x) \rightarrow \xi^2V(x)$ which is the same as scaling $\hbar$ itself.
+    
+        Scaling the potential does not change it:
+        
+        \begin{equation}
+        \begin{aligned}
+            \xi^2 V(x) = \left\{ \substack{\xi \cdot 0 = 0 \hspace{8mm} 0<x<L \\ \xi \cdot \infty = \infty\hspace{2mm} otherwise}  \right.
+        \end{aligned}
+        \end{equation}
+        
+        Therefore, we can see that the scaled Heat Capacity will be:
+        
+        \begin{equation}
+        \begin{split}
+            C_v^{Box} &= k_B \left( \frac{\beta}{\xi^2} \right) ^2 \cdot \left[ \frac{\sum_{n=1}^\infty E_n^2 e^{- \frac{\beta E_n}{\xi^2}} }{\sum_{n=1}^\infty e^{-\frac{\beta E_n}{\xi^2} }} - \left( \frac{\sum_{n=1}^\infty E_n e^{-\frac{\beta E_n}{\xi^2} } }{\sum_{n=1}^\infty e^{-\frac{\beta E_n}{\xi^2} } } \right)^2 \right] 
+            \\ 
+            &= \frac{k_B \beta^2}{\xi^4} \cdot \left[ \frac{ \sum_{n=1}^\infty E_n^2 e^{- \frac{\beta E_n}{\xi^2}} }{\sum_{n=1}^\infty e^{-\frac{\beta E_n}{\xi^2} }} - \left( \frac{\sum_{n=1}^\infty E_n e^{-\frac{\beta E_n}{\xi^2} } }{\sum_{n=1}^\infty e^{-\frac{\beta E_n}{\xi^2} } } \right)^2 \right] 
+        \end{split}
+        \end{equation}
+        
+        By taking the limit of $\xi\rightarrow \infty$, we can compute the classical limit of this system:
+        \begin{equation}
+        \begin{split}
+            C_v^{Classic \hspace{1mm} Box} &= \lim_{\xi\rightarrow\infty} k_B \beta^2 \frac{1}{\xi^4} \cdot \left[\frac{\sum_{n=1}^\infty E_n^2 e^{- \frac{\beta E_n}{\xi^2}} }{\sum_{n=1}^\infty e^{-\frac{\beta E_n}{\xi^2} }} - \left( \frac{\sum_{n=1}^\infty E_n e^{-\frac{\beta E_n}{\xi^2} } }{\sum_{n=1}^\infty e^{-\frac{\beta E_n}{\xi^2} } } \right)^2 \right] 
+            \\
+            &\overset{E_n = \hspace{0.5mm} n^2E_g}{=} \lim_{\xi\rightarrow\infty} k_B \beta^2 E_g^2 \frac{1}{\xi^4}  \cdot \left[\frac{\sum_{n=1}^\infty n^4 e^{- \frac{\beta n^2 E_g}{\xi^2}} }{\sum_{n=1}^\infty e^{-\frac{\beta n^2 E_g}{\xi^2} } } - \left( \frac{\sum_{n=1}^\infty n^2 e^{-\frac{\beta n^2 E_g}{\xi^2} } }{\sum_{n=1}^\infty e^{-\frac{\beta n^2 E_g}{\xi^2} } } \right)^2 \right]
+        \end{split}
+        \end{equation}
+    
+    \end{enumerate}
+\end{enumerate}
+\subsection{Morse Potential}
+
+\section{Code Changes}
+\subsection*{Phase-Space Auto-Scanner (Version 1.6)}
+To generalize the connection between grid resolution and energy levels, we implemented an automated configuration module that dynamically optimizes spatial bounds $[x_{min}, x_{max}]$ and grid density $N$. 
+
+\begin{enumerate}[label=\textbf{\arabic*.}]
+    \item \textbf{Boundary Detection:} For \textit{smooth} potentials, we utilize \texttt{scipy.optimize.fsolve} to locate classical turning points where $V(x) = E_{ceiling}$. For \textit{hard-wall} potentials, we perform a domain scan to identify the infinite-potential boundaries.
+    \item \textbf{Nyquist Grid Density:} To prevent aliasing, we enforce the Nyquist-Shannon sampling theorem based on the maximum classical momentum:
+    \begin{equation}
+        k_{max} = \frac{\sqrt{2m(E_{max} - V_{min})}}{\hbar}, \quad \Delta x_{target} = \frac{\pi}{2 k_{max}}
+    \end{equation}
+    \item \textbf{Universal Multiplier:} To ensure robust convergence across arbitrary potentials, the grid points $N$ are assigned a floor value relative to the requested state count:
+    \begin{equation}
+        N \geq \max\left( \lceil \frac{x_{max} - x_{min}}{\Delta x_{target}} \rceil, 4.0 \cdot \text{NUM\_STATES} \right)
+    \end{equation}
+\end{enumerate}
+
+\subsection*{Version 1.7 Optimization (June 2026)}
+\begin{enumerate}[label=\textbf{\arabic*.}]
+    \item \textbf{Timer Decoupling:} The \texttt{Timer} utility was migrated from the algorithm backend to the main simulation script. This prevents UI locking during intensive linear algebra operations (\texttt{eigvalsh}).
+    \item \textbf{Boundary Clamping:} Added safety logic to the convergence validator to clamp the "wider" grid boundaries. This resolves the \texttt{ValueError} previously triggered when probing hard-wall potentials.
+    \item \textbf{Performance Optimization:} Grid padding reduced from 4.0x to 1.2x, resulting in a $\sim$10x performance increase without compromising the convergence stability of the energy levels.
+\end{enumerate}
+
+\subsection*{Version 1.8 Optimization (June 2026)}*For complex systems such as the quartic double-well, standard convergence parameters often fail because the energy levels scale slower ($E_n \propto n^{4/3}$) than harmonic systems. This creates a narrow stability window for the $\xi$-scaling factor, bounded below by the requirement to reach the classical continuum limit and bounded above by the onset of finite-$N$ truncation (where high-energy states artificially collapse to zero). Previously, aggressive step sizes (e.g., 30\% per $\xi$ step) caused the algorithm to "skip" this narrow stability window entirely, preventing convergence.To resolve this without the prohibitive $\mathcal{O}(N^3)$ cost of increasing energy levels, we refined the convergence sensitivity. By reducing the $\xi$-multiplier from 1.3 to 1.1, the algorithm now performs a granular search through the phase space, ensuring it captures the plateau before the finite-$N$ roof caves in. Additionally, we relaxed the plateau detection criteria (\texttt{MIN\_STABLE\_XI} and \texttt{TOL\_XI}), acknowledging that the Wigner-Kirkwood expansion for non-harmonic potentials exhibits a subtle natural slope even within the converged classical regime.
+
+\subsection*{Version 1.9 Modularization \& Optimization (July 2026)}
+To enhance reusability and analytical clarity, the monolithic simulation script was refactored into independent modules.
+
+\begin{enumerate}[label=\textbf{\arabic*.}]
+    \item \textbf{Decoupling of System Logic:} The pipeline was separated into distinct engines: a generalized smooth-potential DVR solver, a numerical classical limit $\xi$-convergence module, and an analytical benchmark module restricted to the Harmonic Oscillator (HO).
+    \item \textbf{Algorithmic Simplification:} The DVR core algorithm (v1.3) was restricted exclusively to smooth potentials, omitting hard-wall boundary logic. This establishes a strict computational contract that safely halts execution when discontinuities are encountered, ensuring stable phase-space evaluations.
+    \item \textbf{Performance \& Resource Management:} Diagnostic timers were extracted from the dense DVR solver loops and relocated to the master execution file. This prevents CPU threading bottlenecks during the highly intensive dense matrix diagonalization step (\texttt{eigvalsh}), which, alongside grid refinement, allowed the state convergence threshold to be drastically reduced from $N=2500$ down to $N=500$.
+\end{enumerate}
+
+\subsection*{DVR Resolution Limit Analysis (Version 1.1)}
+To quantitatively evaluate the stability bounds of the sinc-DVR algorithm, an automated limit-finder was implemented utilizing a dual-search methodology:
+
+\begin{enumerate}[label=\textbf{\arabic*.}]
+    \item \textbf{Physical Grid Spacing Metric:} The primary resolution variable was shifted from the raw grid point count ($N$) to the physical grid spacing ($\Delta x$). This provides a generalizable, physics-based metric (tied to the de Broglie wavelength sampling criterion) that is easily compared across different potentials.
+    \item \textbf{Minimal Viable Grid Mapping:} By bisecting the $\Delta x$ phase space against a target tolerance ($10^{-6}$), the algorithm isolates the exact spacing limit (e.g., $\Delta x \leq 0.168$ for 150 HO states) before machine-precision accuracy collapses to order-1 errors.
+    \item \textbf{Maximum Trustworthy Eigenvalues:} For a fixed grid spacing, the solver sweeps the energy level index $n$ to identify the upper bound of analytical agreement. For the HO system, divergence occurs precisely at $n \approx 0.51 N$, rigorously confirming the theoretical DVR safety threshold that only the lower half of computed eigenvalues should be trusted.
+\end{enumerate}
+
+\section{Two Advanced Structural Approaches for Further Optimization}
+\subsection*{1. FFT-Accelerated Krylov Subspace Methods}
+Currently, the Hamiltonian is constructed as a dense $N \times N$ matrix. For high-dimensional or high-state problems, we shift toward a matrix-free approach using \texttt{scipy.sparse.linalg.eigsh}. By representing the Hamiltonian as a linear operator $H|\psi\rangle = T|\psi\rangle + V|\psi\rangle$, we can compute the kinetic energy term $T|\psi\rangle$ via the Fast Fourier Transform (FFT) utilizing the Convolution Theorem. This reduces complexity from $\mathcal{O}(N^3)$ (dense diagonalization) to $\mathcal{O}(N \log N)$ (FFT-based multiplication), enabling the calculation of thousands of states without memory exhaustion.
+
+\subsection*{2. Spatial Grid Mapping}
+The uniform grid of the standard Colbert-Miller DVR is computationally inefficient for non-harmonic potentials. We propose applying an analytical spatial mapping transformation $x = f(u)$, where $u$ is a uniform computational coordinate. By stretching the grid in the "tails" (classically forbidden regions) and compressing it in the high-frequency oscillatory regions of the well, we satisfy the Nyquist limit locally. This adaptive mesh strategy is expected to reduce the required grid points $N$ by a factor of 3 to 4, significantly accelerating the convergence of the heat capacity $C_v$.
+
+\section{Pseudo Code}
+
+\subsection{\texorpdfstring{$\xi$}{xi} Convergence Algorithm}
+
+\subsection{N Convergence Algorithm}
+
+\subsection{DBR algorithm}
+
+
+\appendix
+\section{Further Proofs}
+
+\subsection{Exponent shift to avoid numerical overflow}
+
+\subsection{Derivation of the Valid Range for the Scaling Factor \texorpdfstring{$\xi$}{xi}}The inequalities governing the valid range for the scaling factor $\xi$ arise from the fundamental requirements of transitioning a discrete quantum partition function into a continuous classical integral without introducing numerical truncation artifacts.In the numerical implementation, the scaled partition function is defined as:
+
+\begin{equation}
+Z(\beta, \xi) = \sum_{n} e^{-\beta E_n / \xi^2}
+\end{equation}
+
+To correctly recover the classical limit, $\xi$ must satisfy two conflicting constraints simultaneously:\subsubsection*{1. The Continuum Lower Bound}For a discrete sum over energy levels to smoothly approximate a continuous classical integral, the increment of the exponent between adjacent energy levels must be much smaller than unity. The change in energy between adjacent states is the local level spacing $\Delta E = E_{n+1} - E_n$.Therefore, the condition for the spectrum to appear continuous (the classical continuum limit) is:\begin{equation}\frac{\beta \Delta E}{\xi^2} \ll 1\end{equation}Rearranging this inequality gives the lower bound for $\xi$:
+
+\begin{equation}
+\xi \gg \sqrt{\beta \Delta E}
+\end{equation}
+
+If $\xi$ is too small, the states remain distinctly discrete, resulting in the calculation of the quantum heat capacity rather than the true classical limit.\subsubsection*{2. The Truncation Upper Bound}Because any numerical computation must truncate the infinite sum at a finite maximum energy level, $E_{max} = E_N$, we must ensure that the highest energy states do not artificially dominate or distort the partition function.As $\xi$ increases, the energy levels are scaled down ($\tilde{E}_n = E_n / \xi^2$). To prevent the high-energy states from unphysically contributing to the partition function (which causes a finite-$N$ collapse), the Boltzmann factor at the maximum energy level must remain heavily suppressed:
+
+\begin{equation}
+e^{-\beta E_{max} / \xi^2} \approx 0
+\end{equation}
+
+For this exponential decay to hold, the exponent must be significantly larger than 1:
+
+\begin{equation}
+\frac{\beta E_{max}}{\xi^2} \gg 1
+\end{equation}
+
+Rearranging this inequality gives the upper bound for $\xi$:
+
+\begin{equation}
+\xi \ll \sqrt{\beta E_{max}}
+\end{equation}
+
+If $\xi$ is too large, the upper energy states are compressed below the thermal energy threshold, truncating the spectrum and causing the heat capacity to collapse to zero.
+
+\subsubsection*{The Combined Window}Combining the two limits yields the allowed plateau window for $\xi$:\begin{equation}\sqrt{\beta \Delta E} \ll \xi \ll \sqrt{\beta E_{max}}\end{equation}
+
+\subsection{Trouble Shooting}
+
+\begin{enumerate}
+    \item \textbf{Quantum Cv cuts off abruplty:}
+    Make sure that you have reached a plateau by increasing T in the relevant direction (smaller $\beta \rightarrow$ larger T, larger $\beta \rightarrow$ smaller T)
+    
+    \item \textbf{Classical limit drops at low T:}
+    To stabilize, increase xi-start
+    
+    \item \textbf{Classical limit drops at high T:}
+    To stabilize,
+
+    - DELETE TIMER IN DVR!!! \\
+    - Check what happens when xi doesn't converge, what parameter is given? \\
+    - Save the str output at .txt file \\
+    - move legends from Cv graph so they don't get in the way
+\end{enumerate}
+
+
+\bibliographystyle{alpha}
+\bibliography{referances}
+
+\end{document}
