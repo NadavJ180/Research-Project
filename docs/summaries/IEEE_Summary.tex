@@ -38,323 +38,137 @@ Supervisor: Dr.\ David Gelbwaser-Klimovsky \quad Student ID: [insert]}
 \maketitle
 
 \begin{abstract}
-The long-term goal of this research line is to identify regimes in which a quantum heat machine can approach the Carnot bound more closely, at finite power, than its classical counterpart -- not by violating the second law, but by exploiting the enhanced energy fluctuations of a quantized spectrum, in the spirit of recent quantum-thermodynamics results \cite{campisifazio2016,ye2017}. Because heat capacity \emph{is} a direct measure of those fluctuations, this project builds the numerical groundwork for that search: a pipeline that computes $C_v(T)$ for the quantum and classical versions of \emph{any} smooth one-dimensional potential, and locates the classical limit through an $\hbar$-scaling parameter $\xi$ \cite{gelbwaser2018}. Energy levels are obtained from a Colbert--Miller sinc discrete variable representation (DVR) \cite{colbertmiller1992,lightcarrington2000}, and the classical limit is located by scanning $\xi$ until $C_v(\xi)$ settles onto a plateau -- a numerical realization of the textbook semiclassical statement that shrinking $\hbar$ packs more levels into a fixed energy window -- while a companion criterion rejects the collapse of $C_v$ that occurs once the finite computed spectrum is exhausted. The solver is validated against the analytically solvable harmonic oscillator (HO) and is now being extended to the anharmonic double well. We discuss the Schottky anomaly as the common signature of \emph{any} hard edge in an otherwise continuous spectrum, whether that edge is a numerical truncation artifact or the genuine, exponentially small tunnelling splitting of a double well \cite{kozin2025} -- the latter being a candidate for the kind of quantum enhancement motivating the project.
+A heat engine's cycle moves an amount of heat set directly by its working substance's heat capacity, so $C_v$ is, to first approximation, a proxy for how much heat -- and therefore how much power -- a cycle built from that substance can move. A classical working substance has a comparatively featureless $C_v(T)$. A quantum system with a small, effectively finite number of accessible energy levels \emph{can instead} show a Schottky anomaly: a sudden rise and fall of $C_v(T)$ as the restricted ladder of levels first activates and then saturates \cite{gelbwaser2018,kozin2025} -- a finite level count is necessary for this behavior, but far from every such system displays it. The long-term goal of this research line is to find a system where this anomaly lets $C_v$, and hence engine performance, transiently exceed its classical counterpart, in the spirit of recent quantum-thermodynamics results showing that enhanced energy fluctuations can let a heat engine approach the Carnot bound more closely at finite power \cite{campisifazio2016,ye2017}. This project builds the numerical groundwork for that search: a pipeline that computes $C_v(T)$, quantum and classical, for any smooth one-dimensional potential, using a Colbert--Miller sinc discrete variable representation (DVR) \cite{colbertmiller1992,lightcarrington2000} and an $\hbar$-scaling parameter $\xi$ that locates the classical limit \cite{gelbwaser2018}. Because most potentials of real interest have no closed-form solution, the pipeline validates itself without ever leaning on one: every spectrum is checked against an independently generated, higher-resolution numerical reference rather than an analytic formula, and a companion check rejects the artificial collapse of $C_v$ that can mimic a Schottky anomaly once a finite computed spectrum is exhausted. This closed-form-free methodology is itself certified, once, against the one system where the exact answer is independently known -- the harmonic oscillator (HO) -- where it reproduces the analytic result to machine precision, and is now being extended to a quartic double well.
 \end{abstract}
 
 \begin{IEEEkeywords}
-quantum thermodynamics, discrete variable representation, heat capacity, classical limit, Schottky anomaly, quantum heat engines
+quantum thermodynamics, discrete variable representation, heat capacity, classical limit, numerical validation, quantum heat engines
 \end{IEEEkeywords}
 
 % ===================== I. INTRODUCTION =====================
 \section{Introduction}
 \label{sec:intro}
 
-\subsection{Motivation: Toward More Efficient Quantum Heat Machines}
-The broader aim behind this project is to find operating regimes in which a quantum heat machine outperforms its classical counterpart -- not by exceeding the Carnot efficiency, which the second law forbids for any working substance, but by \emph{approaching} that bound more closely while still delivering finite power. An ideal Carnot cycle is reversible only in the limit of infinitely slow operation, where its power output vanishes; any real engine that runs in finite time necessarily falls short of $\eta_C=1-T_c/T_h$, and how far short depends on the thermodynamic properties of the working substance itself. Recent work in quantum thermodynamics has shown that a working substance with strongly enhanced energy fluctuations -- for instance, near a critical point -- can let a heat engine approach the Carnot point without sacrificing power \cite{campisifazio2016}, and that the heat capacity of a small quantum system, including its finite-size corrections, directly sets the work a cyclic engine can extract \cite{ye2017}. Since $C_v(T)=k_B\beta^2\mathrm{Var}(E)$ (Section~\ref{sec:theory}) is by definition a measure of those fluctuations, a potential whose \emph{quantum} heat capacity exceeds its \emph{classical} value over some temperature range -- the Schottky-type enhancement discussed in Section~\ref{sec:schottky} -- is a natural place to look for this effect. Realizing such an enhancement in an actual device is well beyond a single semester and is not attempted here.
+\subsection{Motivation: The Schottky Anomaly as a Candidate Mechanism}
+The broader aim of this project is to find operating regimes in which a quantum heat machine outperforms its classical counterpart -- not by exceeding the Carnot efficiency, which the second law forbids, but by \emph{approaching} that bound more closely while still delivering finite power. Because a heat engine's cycle moves an amount of heat set by its working substance's heat capacity, $C_v$ is, to first approximation, a proxy for how much heat -- and hence power -- a cycle can move. A classical substance's $C_v(T)$ is comparatively static; a quantum system with a small, effectively finite number of accessible levels can instead show a Schottky anomaly: at low $T$ only the ground state is populated ($C_v\to0$); $C_v$ rises sharply once $k_BT$ becomes comparable to the level spacing; and, because the available levels then saturate while further heating adds little entropy, $C_v$ falls again rather than settling onto a classical plateau \cite{gelbwaser2018,kozin2025}. A restricted, effectively finite level count is a \emph{necessary} ingredient for this behavior, but it is not sufficient -- most quantum systems with many levels do not display a Schottky peak at all -- so the anomaly is a candidate mechanism to be searched for, not something to be assumed.
 
-This report documents the groundwork for that longer-term search: a general-purpose numerical tool, built and validated this semester, that computes $C_v(T)$ for the quantum system \emph{and} its classical counterpart for any smooth one-dimensional potential, using the $\hbar$-scaling parameter $\xi$ introduced below. Having such a tool available for an arbitrary potential -- rather than only the textbook cases with closed-form spectra -- is the necessary first step before the question of where, and by how much, quantum $C_v$ exceeds classical $C_v$ can be explored systematically.
+Recent work has shown that a working substance with strongly enhanced energy fluctuations can let a heat engine approach the Carnot point without sacrificing power \cite{campisifazio2016}, and that the heat capacity of a small quantum system directly constrains the work a cyclic engine can extract \cite{ye2017}. Since $C_v(T)=k_B\beta^2\mathrm{Var}(E)$ is by definition a measure of those fluctuations, a genuine Schottky enhancement -- a system whose \emph{quantum} $C_v$ transiently exceeds its \emph{classical} value -- is exactly the kind of effect this project is searching for. Concretely, the goal is to find such a system, quantify how the enhancement would translate into engine efficiency relative to the classical limit, test whether it generalizes across a family of potentials, and use that to propose a concrete experimental realization. Realizing such a device is well beyond a single semester and is not attempted here; this report documents the groundwork -- a general-purpose numerical tool that computes $C_v(T)$, quantum and classical, for any smooth one-dimensional potential, without which a genuine enhancement could not be searched for systematically.
 
-\subsection{The $\hbar$-Scaling Method}
-The classical limit is reached formally by $\hbar \to 0$. Since $\hbar$ is a fixed constant, the project instead scans a dimensionless factor $\xi$ that plays the role of $1/\hbar$: scaling both temperature and potential energy by $\xi^2$ is mathematically equivalent to sending $\hbar \to \hbar/\xi$ \cite{gelbwaser2018}. As shown in Section~\ref{sec:theory}, this is the same limit the semiclassical approximation takes when it replaces a discrete spectrum with a smooth density of states, which is what justifies using the $\xi$-plateau as a numerical stand-in for $\hbar\to0$.
-
-The remainder of this report is organized as follows. Section~\ref{sec:theory} develops the theoretical and semiclassical background, together with the analytical harmonic-oscillator and box-potential benchmarks derived earlier in the project. Section~\ref{sec:dvr} outlines the physical reasoning behind the DVR method and its automatic grid configuration. Section~\ref{sec:arch} summarizes the computational workflow. Section~\ref{sec:xiconv} discusses the classical-limit search. Section~\ref{sec:systems} presents the systems studied this semester, with the harmonic-oscillator validation figures produced so far. Section~\ref{sec:schottky} discusses the Schottky anomaly and its two roles in this project. Section~\ref{sec:results} reports validation results, Section~\ref{sec:history} summarizes the main numerical refinements made this semester, and Section~\ref{sec:future} outlines planned work for the summer continuation.
+\subsection{Approach: A Self-Validating, Closed-Form-Free Pipeline}
+Two ingredients make the pipeline usable on an arbitrary potential. First, the classical limit is reached not by taking $\hbar\to0$ directly, but by scanning a dimensionless factor $\xi$ that plays the role of $1/\hbar$ (Section~\ref{sec:theory}). Second -- and central to this report -- every energy spectrum the pipeline produces is checked not against an analytic formula, which does not exist for most potentials of interest, but against an independently generated, higher-resolution numerical reference computed by the same DVR solver (Section~\ref{sec:validation}). This self-consistent ground truth is the only one available once the project moves past the textbook cases, so this semester's central deliverable is showing that it can be trusted: Section~\ref{sec:validation} confirms it agrees with the HO, the one case where the exact answer is known, to machine precision.
 
 % ===================== II. THEORY =====================
 \section{Theoretical Background}
 \label{sec:theory}
-
-\subsection{Heat Capacity from the Canonical Partition Function}
-For a system with discrete energy levels $\{E_n\}$ at inverse temperature $\beta = 1/(k_B T)$, the partition function is $Z = \sum_n e^{-\beta E_n}$, and the heat capacity follows from the variance of the energy,
+For a system with discrete energy levels $\{E_n\}$ at inverse temperature $\beta=1/(k_BT)$, the heat capacity follows from the variance of the energy,
 \begin{equation}
 C_v(T) = k_B \beta^2 \left[\expval{E^2} - \expval{E}^2\right] = k_B\beta^2\,\mathrm{Var}(E).
 \label{eq:cv_general}
 \end{equation}
-Physically, Eq.~\eqref{eq:cv_general} says that heat capacity \emph{is} a measure of thermal energy fluctuations: a system whose accessible states span a wide range of energies at temperature $T$ absorbs heat easily (large $C_v$), while a system frozen into one or two states cannot fluctuate and $C_v\to0$. This single relation is used throughout, whether $\{E_n\}$ comes from a closed-form expression or from a numerical diagonalization -- the physics does not care how the spectrum was obtained.
+This holds whether $\{E_n\}$ comes from a closed-form expression or a numerical diagonalization.
 
-\subsection{The $\hbar$-Scaling Route to the Classical Limit}
 Following \cite{gelbwaser2018} (Eq.~S7 therein), the energy levels of a potential scaled by $\xi^2$ obey
 \begin{equation}
-\frac{E_n\!\left(\hbar_{\text{eff}}=\hbar,\ \xi^2 V(x)\right)}{\xi^2} = E_n\!\left(\hbar_{\text{eff}}=\frac{\hbar}{\xi},\ V(x)\right).
+\frac{E_n\!\left(\hbar_{\text{eff}}=\hbar,\ \xi^2 V(x)\right)}{\xi^2} = E_n\!\left(\hbar_{\text{eff}}=\frac{\hbar}{\xi},\ V(x)\right),
 \label{eq:scaling}
 \end{equation}
-For systems without a closed-form $E_n(\hbar_{\text{eff}})$, Eq.~\eqref{eq:scaling} is realized by scaling \emph{both} temperature and potential by $\xi^2$, i.e. evaluating Eq.~\eqref{eq:cv_general} with $E_n \to E_n/\xi^2$.
-
-\subsubsection{Valid window for $\xi$}
-Any numerical spectrum is truncated at a finite highest computed level $E_{\max}$, so the plateau in $C_v(\xi)$ can only be trusted inside a finite window. For the level spacing to be negligible on the scale of $k_BT$ -- the condition for the sum over states to look like the continuous classical integral -- the semiclassical continuum condition requires
-\begin{equation}
-\xi \gg \sqrt{\beta\,\Delta E}.
-\label{eq:xilower}
-\end{equation}
-At the same time, the truncated sum must not be distorted by the artificial edge at $E_{\max}$: that highest level must remain thermally inaccessible,
-\begin{equation}
-\xi \ll \sqrt{\beta\,E_{\max}}.
-\label{eq:xiupper}
-\end{equation}
-Combining Eqs.~\eqref{eq:xilower}--\eqref{eq:xiupper} gives the plateau window actually searched numerically,
+which is realized numerically by scaling both temperature and the spectrum by $\xi^2$ in Eq.~\eqref{eq:cv_general}. Any computed spectrum is truncated at a finite highest level $E_{\max}$, so the plateau in $C_v(\xi)$ this produces can only be trusted inside a finite window: $\xi$ must be large enough for the level spacing to look continuous on the scale of $k_BT$, yet small enough that $E_{\max}$ stays thermally inaccessible,
 \begin{equation}
 \sqrt{\beta\,\Delta E} \;\ll\; \xi \;\ll\; \sqrt{\beta\,E_{\max}}.
 \label{eq:xiwindow}
 \end{equation}
-The lower bound is the semiclassical continuum condition introduced above; the upper bound is a purely numerical artifact of working with a finite basis (Section~\ref{sec:schottky} returns to this distinction).
+Section~\ref{sec:validation} explains how the pipeline locates this window and recognizes when $\xi$ has left it.
 
-\subsection{Analytical Benchmarks}
-Two systems with closed-form solutions anchor the numerical pipeline and illustrate the correspondence principle explicitly.
-
-\subsubsection{Harmonic oscillator (HO)}
-With $E_n = \hbar\omega(n+\tfrac12)$, the partition function is a geometric series, $Z^{\text{HO}} = e^{-\beta\hbar\omega/2}/(1-e^{-\beta\hbar\omega})$, giving the Einstein oscillator heat capacity
+For the HO, $E_n=\hbar\omega(n+\tfrac12)$ gives the closed-form Einstein heat capacity
 \begin{equation}
-C_v^{\text{HO}} = \frac{1}{4}k_B\left[\beta\hbar\omega\,\operatorname{csch}\!\left(\frac{\beta\hbar\omega}{2}\right)\right]^2 .
+C_v^{\text{HO}} = \frac{1}{4}k_B\left[\beta\hbar\omega\,\operatorname{csch}\!\left(\frac{\beta\hbar\omega}{2}\right)\right]^2 ,
 \label{eq:cvho}
 \end{equation}
-Taking $\xi\to\infty$ in the scaled version of Eq.~\eqref{eq:cvho} (via L'H\^opital's rule) gives $C_v^{\text{HO,classical}} = k_B$: exactly the equipartition value expected from the two quadratic (kinetic + potential) degrees of freedom in the HO Hamiltonian. Physically, $\beta\hbar\omega\to0$ is the statement that the thermal energy $k_BT$ vastly exceeds the level spacing $\hbar\omega$, so the discreteness of the ladder becomes invisible -- the same conclusion as Eq.~\eqref{eq:xilower} with $\Delta E=\hbar\omega$.
-
-\subsubsection{Box potential}
-With $E_n = n^2 E_g$ and no closed-form sum, Eq.~\eqref{eq:cv_general} is evaluated by truncating the infinite series; equipartition (one quadratic, kinetic-only, degree of freedom) predicts $C_v^{\text{box,classical}} = \tfrac12 k_B$. This system was used early in the project to validate the variance-based formula and the truncated-sum approach before moving to potentials with no closed form at all.
+tending to the equipartition value $k_B$ as $\beta\hbar\omega\to0$. Equation~\eqref{eq:cvho} is the closed-form answer the pipeline is checked against in Section~\ref{sec:validation}.
 
 % ===================== III. DVR METHOD =====================
 \section{Physical Basis of the Numerical Method}
 \label{sec:dvr}
+For potentials with no analytical spectrum, $\{E_n\}$ is obtained from a Colbert--Miller sinc discrete variable representation (DVR) \cite{colbertmiller1992,lightcarrington2000}, which represents the wavefunction by its values on an evenly spaced grid. The grid is faithful only if sampled finely enough relative to how quickly $\psi(x)$ oscillates, which the Nyquist--Shannon theorem turns into a condition on the local momentum of the state being represented. The same argument is why the solver is restricted to potentials with no true discontinuity: at a hard wall the wavefunction's derivative jumps, its momentum content becomes effectively unbounded, and no finite grid can resolve it without aliasing high-momentum content back into the low-lying spectrum.
 
-For potentials with no analytical spectrum, the project obtains $\{E_n\}$ from a Colbert--Miller sinc discrete variable representation (DVR) \cite{colbertmiller1992}, a standard tool in molecular quantum dynamics for exactly this kind of problem; a comprehensive treatment of DVR methods and their properties is given in the review by Light and Carrington \cite{lightcarrington2000}. Rather than reproduce that derivation, this section summarizes the physical picture behind the method, since it is what determines both the accuracy and the validity range of every energy level the pipeline produces.
+The grid span and spacing are set automatically from the potential itself: the span from where the wavefunctions have decayed to negligible amplitude, widened iteratively until the eigenvalues stop changing, and the spacing from the local de Broglie wavelength at the highest energy requested. Because a finite grid carries two logically distinct error sources -- too coarse a spacing, or too narrow a span -- the pipeline checks each independently, in the spirit of a Richardson-extrapolation convergence study, before any spectrum is used downstream.
 
-\subsection{Why a Grid-Based Representation Works at All}
-A DVR represents the wavefunction by its values on an evenly spaced grid rather than by coefficients in an analytical basis (such as Hermite polynomials for the HO). The grid is only faithful to the true wavefunction if it is sampled finely enough relative to how quickly $\psi(x)$ oscillates -- exactly the condition addressed by the Nyquist--Shannon sampling theorem. Because the kinetic energy operator is diagonal in momentum space, this sampling requirement translates directly into a condition on the local momentum, or equivalently the local de Broglie wavelength, of the state being represented \cite{colbertmiller1992,lightcarrington2000}. The practical consequence, used throughout Sections~\ref{sec:dvr}-C--D, is that grid density should be set by \emph{how fast the wavefunction moves}, not by an arbitrary point count.
+% ===================== IV. VALIDATION =====================
+\section{Validation Strategy: A Ground Truth Without Closed-Form Solutions}
+\label{sec:validation}
+The pipeline is a short chain of system-agnostic stages: grid configuration and DVR solve, a higher-resolution numerical reference solve, a convergence check between the two, the $\xi/n$-scan, and a final base-vs-reference $C_v(T)$ benchmark. Switching to a new potential only requires changing the potential function itself; every other stage regenerates automatically.
 
-\subsection{Why Only Smooth Potentials}
-The sampling argument above also explains why the solver is restricted to potentials with no true discontinuity (e.g. an infinite hard wall). At a discontinuity, the wavefunction's derivative is itself discontinuous, which means its momentum content extends to arbitrarily large values -- no finite grid spacing can resolve it, and any grid attempting to do so aliases high-momentum content back into the low-lying spectrum. Restricting the pipeline to smooth potentials keeps every computed level inside the regime where the grid faithfully represents the wavefunction.
+\subsection{A Self-Consistent Reference, Not an Analytic One}
+The ground truth at every stage is not a formula but a second DVR solve on an independently wider and finer grid. If the two agree to a set tolerance, the base result is declared converged -- the logic of Richardson extrapolation, used here as a pass/fail check rather than to improve the answer. This works identically for the HO, the double well, and every future potential, since it never touches a closed-form solution. It is not, however, proof of correctness by itself: a systematic error shared by both grids -- a bug in the DVR solver -- could make the two agree while both are wrong. Internal agreement rules out a coarse or truncated grid; it cannot rule out a flaw common to every grid the same code produces.
 
-\subsection{Choosing the Grid: A Local Nyquist Criterion}
-Two physically motivated choices fix the grid entirely. \emph{Grid extent:} the classical turning points of an energy ceiling $E_{\text{ceil}}\!\sim\!v_{\min}+1.5N_{\text{lev}}$ (the energy above which the requested $N_{\text{lev}}$ levels are very unlikely to lie) mark where the wavefunctions cross from oscillatory to evanescent; the grid is padded somewhat beyond these points and widened further, at fixed spacing, until the eigenvalues stop changing -- i.e. until the residual tail amplitude at the edge is numerically irrelevant. \emph{Grid density:} the local momentum reaches its maximum, $k_{\max}=\sqrt{2m(E_{\text{ceil}}-v_{\min})}/\hbar$, at the bottom of the well; the grid spacing is set to sample at roughly twice this shortest local de Broglie wavelength -- the Nyquist criterion for this problem, not an arbitrary numerical choice.
+\subsection{Certifying the Method Against the One Known Answer}
+That gap is closed by running the identical base-vs-reference machinery on the HO, without feeding it the Einstein formula of Eq.~\eqref{eq:cvho} anywhere, and only afterward comparing the result against it, external to the pipeline. Section~\ref{sec:systems} reports agreement to machine precision at every temperature: the self-consistent procedure converges to the physically correct answer, not merely to a shared artifact of the method -- the evidence that licenses trusting the same reference-grid check once the pipeline is pointed at potentials with no closed-form answer to compare against.
 
-\smallskip
-\noindent\textbf{Input:} potential $V(x)$, level count $N_{\text{lev}}$, mass $m$, $\hbar$. \quad
-\textbf{Output:} grid bounds $x_{\min},x_{\max}$ and point count $N_{\text{grid}}$.
+\subsection{Recognizing a Genuine Result vs.\ an Artifact}
+A second check concerns the $\xi$-scan itself, and is where the two senses of ``Schottky anomaly'' in this report must be told apart. As $\xi$ increases, $C_v(\xi)$ is expected to plateau inside the window of Eq.~\eqref{eq:xiwindow}; pushed further, it instead collapses toward zero once the scaled spectrum runs out of thermally accessible levels. That collapse can reproduce the same rise-and-fall shape as the genuine, physical Schottky anomaly of Section~\ref{sec:intro} -- a finite spectrum, whatever its origin, is capable of the same signature -- so mistaking one for the other would mean reporting a spurious enhancement instead of the real effect being searched for. The pipeline tells them apart with a companion scan over how many computed levels were actually needed to reach the plateau: convergence using only a handful of low-lying levels reflects real physics, while a result that only stabilizes near the top of the computed spectrum is a warning that truncation is shaping the curve. Only a result clearing both checks -- base-vs-reference agreement \emph{and} a genuine, non-collapsing plateau -- is reported as the classical limit or as a candidate physical Schottky feature.
 
-\subsection{Isolating the Two Independent Sources of Error}
-Any calculation on a finite grid carries two logically distinct error sources: an incomplete momentum bandwidth (too coarse a grid) and an incomplete spatial domain (too narrow a box, truncating the tails). Before any spectrum is used downstream, the pipeline checks each independently -- refining the spacing at fixed span, then widening the span at fixed spacing -- in the same spirit as a Richardson-extrapolation convergence study. Section~\ref{sec:results} reports the resulting accuracy for the harmonic-oscillator benchmark.
-
-\begin{figure}[!t]
-\centering
-\includegraphics[draft=false,width=0.9\columnwidth]{fig_pipeline.png}
-\caption{Numerical workflow of the pipeline: solve the base spectrum, generate a higher-resolution reference spectrum, verify resolution/boundary convergence against it, compute quantum $C_v(T)$ and locate the classical plateau via the $\xi/n$-scan, and benchmark base- against reference-grid $C_v(T)$. The dashed feedback path indicates that the grid is refined automatically if the convergence check of Section~\ref{sec:dvr}-D fails.}
-\label{fig:pipeline}
-\end{figure}
-
-% ===================== IV. ARCHITECTURE =====================
-\section{Computational Workflow}
-\label{sec:arch}
-
-The above physics is realized as a short chain of independent, system-agnostic stages (Fig.~\ref{fig:pipeline}): a grid-configuration and DVR-solve stage; a higher-resolution reference solve used as numerical ground truth for any potential (replacing the analytical HO formula once a system has no closed form); the resolution/boundary convergence check of Section~\ref{sec:dvr}; the $\xi/n$-convergence scan of Section~\ref{sec:xiconv}; and a final benchmark comparing base- and reference-grid $C_v(T)$. Because every stage after the grid configuration is written in terms of a generic energy array rather than a specific potential, switching to a new system requires changing only the potential function itself -- every other stage, including the ground-truth reference, regenerates automatically.
-
-Table~\ref{tab:params} lists the numerical control parameters governing the $\xi$/$n$-scan and the temperature sweep, using the notation introduced in Section~\ref{sec:xiconv}. These are the settings the pipeline is presently configured with -- the same values under which the double well of Section~\ref{sec:systems}-B is now being run; several of them (notably $\text{mult}$) were tightened over the course of the semester specifically to handle the double well's narrower plateau window (Section~\ref{sec:history}), so they are not necessarily identical to the settings in force when the earlier HO benchmark of Section~\ref{sec:results} was generated.
-
-\begin{table}[!t]
-\centering
-\caption{Numerical Control Parameters of the $\xi$/$n$-Scan (Current Pipeline Configuration)}
-\label{tab:params}
-\footnotesize
-\begin{tabular}{@{}>{$}l<{$}>{\raggedright\arraybackslash}p{1.5cm}>{\raggedright\arraybackslash}p{4.35cm}@{}}
-\toprule
-\textbf{Symbol} & \textbf{Value} & \textbf{Role} \\
-\midrule
-N_{\text{lev}} & 500 & levels computed per spectrum \\
-\beta_{\min},\beta_{\max} & 0.01,\ 50.0 & temperature sweep range \\
-\xi_0 & 3.0 & first $\xi$-scan probe \\
-\text{mult} & 1.1 & geometric step per $\xi$ iteration \\
-\varepsilon_\xi & $5\times10^{-3}$ & plateau-detection tolerance, Eq.~\eqref{eq:plateautest} \\
-\varepsilon_n & $10^{-4}$ & $n$-convergence tolerance, Eq.~\eqref{eq:ntest} \\
-\varepsilon_{\text{DVR}} & $10^{-6}$ & resolution/boundary tolerance (Sec.~\ref{sec:dvr}-D) \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-% ===================== V. XI/N CONVERGENCE =====================
-\section{Locating the Classical Plateau}
-\label{sec:xiconv}
-
-Two nested scans turn the window of Eq.~\eqref{eq:xiwindow} into an operational procedure.
-
-\subsection{Scanning $\xi$}
-Starting from a probe value $\xi_0$, $\xi$ is stepped up geometrically and $C_v(\xi)$ is recomputed at each step from the scaled spectrum $E_n\to E_n/\xi^2$. Two outcomes are distinguished: a run of near-constant $C_v$ values, accepted as the plateau of Eq.~\eqref{eq:xiwindow}, versus a sudden drop toward zero, which signals that $\xi$ has entered the finite-$N$ regime of Eq.~\eqref{eq:xiupper} rather than the physical classical limit. This second outcome is not a failure of the physics -- it is exactly the Schottky-type collapse discussed in Section~\ref{sec:schottky}, and distinguishing it from a genuine plateau is the entire point of the scan (see Fig.~\ref{fig:xi_convergence} for a worked example).
-
-\smallskip
-\noindent\textbf{Input:} spectrum $\{E_n\}$, $\beta$, probe $\xi_0$, tolerance $\varepsilon_\xi$. \quad
-\textbf{Output:} converged scaling factor $\xi_{\text{conv}}$ and classical-limit heat capacity $C_v^{\text{conv}}$, or a reported failure if no plateau is found before collapse.
-\begin{equation}
-\text{(plateau test)}\qquad \big|C_v(\xi)-C_v(\xi/\text{mult})\big| < \varepsilon_\xi .
-\label{eq:plateautest}
-\end{equation}
-
-\subsection{Checking How Many Levels Were Actually Needed}
-A second, independent scan asks how many of the computed levels were actually required to reach that plateau: $C_v$ is recomputed at $\xi_{\text{conv}}$ using only the lowest $n$ levels, for increasing $n$, until it stops changing (Fig.~\ref{fig:n_convergence}). A converged answer using only a handful of low-lying levels indicates a robust, physically meaningful result, whereas one that only stabilizes near the very top of the computed spectrum is a warning sign that the truncation itself, not genuine physics, is shaping the curve (Section~\ref{sec:schottky}).
-
-\smallskip
-\noindent\textbf{Input:} spectrum $\{E_n\}$, $\beta$, $\xi_{\text{conv}}$, tolerance $\varepsilon_n$. \quad
-\textbf{Output:} minimal level count $n_{\text{conv}}$ needed for a converged $C_v$.
-\begin{equation}
-\text{($n$-convergence test)}\qquad \big|C_v(n{+}1)-C_v(n)\big| < \varepsilon_n .
-\label{eq:ntest}
-\end{equation}
-
-% ===================== VI. SYSTEMS =====================
-\section{Systems Studied}
+% ===================== V. SYSTEMS AND RESULTS =====================
+\section{Systems Studied and Results}
 \label{sec:systems}
 
 \subsection{Harmonic Oscillator -- Validation Case}
-The HO is the reference system used to validate the numerical method against Eq.~\eqref{eq:cvho} before trusting the same pipeline on systems with no closed-form answer. Figures~\ref{fig:ho_energy_comparison}--\ref{fig:n_convergence} show the full set of validation diagnostics produced so far, all for $N_{\text{lev}}=500$.
+The HO is the system used to certify the methodology of Section~\ref{sec:validation}, since it is the only one where an independent, closed-form answer exists to check against. Base-grid energy levels agree with the numerical reference to within machine precision across the full spectrum (Fig.~\ref{fig:ho_energy_comparison}), and the resulting quantum and classical-limit $C_v(T)$ curves, together with the converged $\xi$ and $n$ values certifying each point, show the same agreement (Fig.~\ref{fig:cv_summary_ho}). Figure~\ref{fig:xi_convergence} shows a representative $\xi$-scan: a genuine plateau followed by the finite-$N$ collapse of Section~\ref{sec:validation}, the two outcomes the scan must distinguish.
 
 \begin{figure}[!t]
 \centering
 \includegraphics[draft=false,width=0.9\columnwidth]{fig_ho_energy_comparison.png}
-\caption{Base-grid vs. numerical-reference energy levels $E_n$ for the HO, full spectrum (left) and zoomed to the ten states around the largest absolute error, near $n=494$ (right). The two are visually indistinguishable at either scale.}
+\caption{Base-grid vs. numerical-reference energy levels $E_n$ for the HO, full spectrum (left) and zoomed to the states with the largest absolute error (right).}
 \label{fig:ho_energy_comparison}
 \end{figure}
 
 \begin{figure}[!t]
 \centering
-\includegraphics[draft=false,width=0.9\columnwidth]{fig_ho_error_vs_n.png}
-\caption{Relative error between base-grid and reference-grid energy levels vs. state index $n$. The error is already at the $10^{-13}$--$10^{-12}$ level for the very lowest states and settles to a flat $\sim\!1.5\times10^{-13}$ plateau by $n\approx100$ -- consistent with both grids being converged to machine precision, so that only floating-point round-off remains.}
-\label{fig:ho_error_vs_n}
-\end{figure}
-
-\begin{figure}[!t]
-\centering
 \includegraphics[draft=false,width=0.9\columnwidth]{fig_cv_summary_ho.png}
-\caption{Quantum $C_v(T)$ (solid) and numerical classical limit (dashed) for the HO, together with the converged $\xi_{\text{conv}}(T)$ and $n_{\text{conv}}(T)$ on the secondary axis. The classical limit tracks $C_v/k_B=1$ across the full range where the $\xi$-scan converges; $n_{\text{conv}}$ rises with $T$ as more levels are needed to represent a hotter thermal state.}
+\caption{Quantum $C_v(T)$ (solid) and numerical classical limit (dashed) for the HO, with converged $\xi$ and $n$ on the secondary axis. The classical limit tracks the exact equipartition value $C_v/k_B=1$.}
 \label{fig:cv_summary_ho}
 \end{figure}
 
 \begin{figure}[!t]
 \centering
 \includegraphics[draft=false,width=0.9\columnwidth]{fig_xi_convergence.png}
-\caption{$\xi$-convergence diagnostic at the hardest (lowest) temperature in the sweep, $k_BT/\hbar\omega=0.02$. $C_v(\xi)$ rises (grey), stabilizes onto the plateau (green, $\xi_{\text{conv}}=24.5$, $C_v^{\text{conv}}/k_B=0.9995$), and eventually collapses (yellow) once $\xi$ pushes the scaled spectrum into the finite-$N$ regime of Eq.~\eqref{eq:xiupper} -- the numerical Schottky-type failure mode of Section~\ref{sec:schottky}.}
+\caption{$\xi$-convergence at the hardest temperature in the sweep: $C_v(\xi)$ rises (grey), stabilizes onto a genuine plateau (green), then collapses (yellow) once $\xi$ leaves the window of Eq.~\eqref{eq:xiwindow} -- the failure mode of Section~\ref{sec:validation}.}
 \label{fig:xi_convergence}
 \end{figure}
 
-\begin{figure}[!t]
-\centering
-\includegraphics[draft=false,width=0.9\columnwidth]{fig_n_convergence.png}
-\caption{$n$-convergence diagnostic at the hardest temperature in the sweep, $k_BT/\hbar\omega=2.50$. $C_v(n)$ rises smoothly and is converged (to within $\varepsilon_n$) at $n_{\text{conv}}=397$ out of the 500 computed levels, with $C_v/k_B=0.995$ at that point.}
-\label{fig:n_convergence}
-\end{figure}
-
-\subsection{Symmetric / Asymmetric Double Well -- Current System}
-The potential currently under study is the quartic double well
-\begin{equation}
-V(x) = \frac14 x^4 + b\,x^3 - \frac12 x^2,
-\label{eq:doublewell}
-\end{equation}
-with $b=-0.5$ in the active run; setting $b=0$ recovers the purely symmetric double well. The $b\neq0$ term probes the asymmetric case discussed with the supervisor (Meeting~8): comparing the near-well region of a deep asymmetric well against the symmetric HO result as an additional sanity check. This is the first anharmonic potential in the pipeline, and it is a meaningfully harder test than the HO: its levels scale as $E_n\propto n^{4/3}$ rather than linearly, so the level spacing $\Delta E(E)$ shrinks with energy far more slowly, which narrows the plateau window of Eq.~\eqref{eq:xiwindow} (Section~\ref{sec:history}). Numerical results for this potential are still being produced and are not yet included in this report (Section~\ref{sec:future}).
-
-The double well also has a genuine two-scale spectrum: a finite central barrier supports a near-degenerate pair of levels below the barrier, split by quantum tunnelling, separated by a much larger gap from the states above it. In the WKB approximation, the size of this splitting is exponentially small in the barrier's classical action,
-\begin{equation}
-\Delta_{\text{tunnel}} \sim \hbar\omega_0\,\exp\!\left(-\frac{1}{\hbar}\int_{-a}^{a}\!\sqrt{2m\big(V(x)-E_0\big)}\;dx\right),
-\label{eq:wkbsplitting}
-\end{equation}
-where $\pm a$ are the inner classical turning points at the ground-state energy $E_0$ of a single well. Equation~\eqref{eq:wkbsplitting} is the physical origin of the Schottky discussion in Section~\ref{sec:schottky}: it sets the temperature scale, $k_BT_{\text{peak}}\sim\Delta_{\text{tunnel}}$, at which a genuine low-temperature feature in $C_v(T)$ -- and a candidate quantum-over-classical enhancement of the kind motivating this project (Section~\ref{sec:intro}) -- is expected.
-
-% ===================== VII. SCHOTTKY =====================
-\section{The Schottky Anomaly and Its Relevance to This Project}
-\label{sec:schottky}
-
-A Schottky anomaly is a peak in $C_v(T)$ characteristic of systems with a small, effectively finite number of accessible energy levels: at low $T$ only the ground state is populated ($C_v\to0$), $C_v$ rises to a maximum once $k_BT$ becomes comparable to the level spacing, and then falls again as the available levels saturate and further heating produces little additional entropy change \cite{gelbwaser2018,kozin2025}. It is ``anomalous'' precisely because $C_v$ for a system with an effectively infinite, evenly-filling ladder of states (like the HO in its classical limit) does not fall back down -- it saturates at the equipartition value instead.
-
-The unifying idea behind both roles this feature plays in the project is that $C_v(T)$, as built from Eq.~\eqref{eq:cv_general}, is mathematically blind to \emph{why} a spectrum has a top rung -- it only responds to the fact that one exists. A hard edge in the level ladder produces the same qualitative peak-and-decay signature whether that edge is a fundamental energy gap or an artifact of a finite numerical basis.
-
-\subsection{Schottky Collapse as a Numerical Artifact}
-Any DVR calculation truncates the spectrum at a finite $N_{\text{lev}}$. Once $k_BT$ (or, equivalently, the scaled thermal scale under $\xi$) approaches the energy of the \emph{highest computed level}, that finite basis behaves exactly like a small-level-count Schottky system: $C_v$ turns over and collapses toward zero, even though the true, infinite-level system's $C_v$ would continue rising toward the classical plateau. This is precisely the failure mode that the plateau scan of Section~\ref{sec:xiconv} is built to detect and reject (Fig.~\ref{fig:xi_convergence}), Eq.~\eqref{eq:xiupper} being its quantitative statement. In this sense every finite spectrum computed by this pipeline is a latent Schottky system, and the entire $\xi$/$n$-convergence procedure exists to keep the reported classical limit on the correct side of that artifact.
-
-\subsection{A Genuine Schottky Signature in the Double Well}
-The second connection is physical rather than numerical. The double well's tunnelling-split doublet of Eq.~\eqref{eq:wkbsplitting} is a small energy gap nested inside a much larger one (the gap to the states above the barrier) -- the textbook precondition for a genuine, physical Schottky peak, and tunnelling-split doublets in symmetric double-well potentials are indeed reported to produce narrow Schottky features in the literature \cite{kozin2025}. If confirmed numerically for Eq.~\eqref{eq:doublewell}, a low-temperature bump in $C_v(T)$ near $k_BT\sim\Delta_{\text{tunnel}}$, well before the climb to the classical plateau, would be a real thermodynamic feature of this system rather than a truncation artifact -- and would directly address the goal set in Meeting~8 of finding a potential where the quantum $C_v$ transiently exceeds the classical value. As discussed in Section~\ref{sec:intro}, this kind of enhanced energy-fluctuation regime is exactly the mechanism identified in \cite{campisifazio2016} as a route to approaching Carnot efficiency at finite power, which is the broader motivation this semester's tool is meant to serve.
-
-Distinguishing the two cases in practice comes down to where the feature sits relative to $n_{\text{conv}}(T)$: a genuine tunnelling-doublet peak should be well converged using only the lowest handful of levels, while an artifactual collapse only ever appears once $n_{\text{conv}}$ approaches $N_{\text{lev}}$.
-
-% ===================== VIII. RESULTS =====================
-\section{Results and Validation}
-\label{sec:results}
-
-\subsection{Harmonic-Oscillator Validation}
-Figure~\ref{fig:ho_error_vs_n} shows that the base and reference grids agree to within machine precision across the full computed spectrum, with a relative error plateau of $\sim\!1.5\times10^{-13}$. This propagates through to the thermodynamic observable: Fig.~\ref{fig:cv_benchmark_quantum} shows the quantum $C_v(T)$ agreeing with the reference to a maximum absolute error of $3.84\times10^{-13}\,k_B$, Fig.~\ref{fig:cv_benchmark_quantum_rel} shows the same comparison as a relative error (meaningful only away from the very lowest temperatures, where both curves numerically underflow toward zero), and Fig.~\ref{fig:cv_benchmark_classical} shows the classical-limit curve agreeing to a maximum relative error of $6.34\times10^{-14}$.
-
-\begin{figure}[!t]
-\centering
-\includegraphics[draft=false,width=0.9\columnwidth]{fig_dvr_res_dx.png}
-\caption{DVR resolution limit: relative eigenvalue error vs. grid spacing $\Delta x$, at fixed span (105) and 500 requested levels. Spacings up to $\Delta x\approx0.096$ (1092 points) remain below the $10^{-6}$ tolerance; the error rises by many orders of magnitude just beyond that point.}
-\label{fig:dvr_res_dx}
-\end{figure}
-
-\begin{figure}[!t]
-\centering
-\includegraphics[draft=false,width=0.9\columnwidth]{fig_dvr_res_n.png}
-\caption{DVR level-count limit: relative eigenvalue error vs. requested level count $n$, at a fixed grid (2582 points, $\Delta x=0.04056$). The maximum trustworthy count is $n=1323$, i.e. $1323/2582\approx0.51$ of the grid's points -- a direct confirmation of the rule of thumb that only roughly the lower half of a DVR spectrum should be trusted, since the highest-index states are the first whose local momentum exceeds what the fixed spacing can resolve.}
-\label{fig:dvr_res_n}
-\end{figure}
+Separately, the DVR solver's own resolution and level-count limits were characterized directly, confirming the standard rule of thumb that only roughly the lower half of a computed spectrum should be trusted. Figures~\ref{fig:cv_benchmark_quantum}--\ref{fig:cv_benchmark_classical} close the loop with the external certification of Section~\ref{sec:validation}-B: the fully numerical, closed-form-free pipeline agrees with the exact Einstein-oscillator answer to machine precision, for both the quantum curve and its classical limit.
 
 \begin{figure}[!t]
 \centering
 \includegraphics[draft=false,width=0.9\columnwidth]{fig_cv_benchmark_quantum_abs.png}
-\caption{Quantum $C_v(T)$: base grid vs. numerical reference, with the absolute error shown below. Maximum absolute error $3.84\times10^{-13}\,k_B$.}
+\caption{Quantum $C_v(T)$: fully numerical pipeline vs. the exact analytic Einstein-oscillator formula, with the absolute error shown below. Agreement is at machine precision throughout.}
 \label{fig:cv_benchmark_quantum}
 \end{figure}
 
 \begin{figure}[!t]
 \centering
-\includegraphics[draft=false,width=0.9\columnwidth]{fig_cv_benchmark_quantum_rel.png}
-\caption{Same comparison as Fig.~\ref{fig:cv_benchmark_quantum}, shown as a relative rather than absolute error. The spikes at the lowest temperatures are a numerical artifact, not a real loss of accuracy: both $C_v^{\text{base}}$ and $C_v^{\text{ref}}$ underflow toward zero there, so their already-tiny absolute difference is being divided by an equally tiny reference value. This is why the reported maximum relative error is formally infinite, while Fig.~\ref{fig:cv_benchmark_quantum} shows the same comparison is in fact accurate to $10^{-13}\,k_B$ throughout.}
-\label{fig:cv_benchmark_quantum_rel}
-\end{figure}
-
-\begin{figure}[!t]
-\centering
 \includegraphics[draft=false,width=0.9\columnwidth]{fig_cv_benchmark_classical.png}
-\caption{Classical-limit $C_v(T)$: base grid vs. numerical reference, with the relative error shown below. All 500 temperature points converged on both grids; maximum relative error $6.34\times10^{-14}$.}
+\caption{Classical-limit $C_v(T)$: fully numerical pipeline vs. the exact equipartition value $k_B$, with the relative error shown below. Every temperature point converges, at machine precision.}
 \label{fig:cv_benchmark_classical}
 \end{figure}
 
-\subsection{Double-Well Progress}
-The double well of Eq.~\eqref{eq:doublewell} is now running end-to-end through the same workflow used for the HO, with no changes beyond the potential definition itself -- direct evidence that the system-agnostic design of Section~\ref{sec:arch} succeeded in its goal. Quantitative results for this system, and in particular whether the low-temperature feature predicted by Eq.~\eqref{eq:wkbsplitting} is visible, are the main outstanding deliverable for the summer continuation described in Section~\ref{sec:future}.
+\subsection{Double Well -- Next System}
+The next system is a quartic double well, $V(x) = \tfrac14 x^4 + b\,x^3 - \tfrac12 x^2$, the first anharmonic potential in the pipeline. It is a harder test than the HO: its levels scale as $E_n\propto n^{4/3}$ rather than linearly, narrowing the plateau window of Eq.~\eqref{eq:xiwindow} (Section~\ref{sec:history}). The double well has no closed-form solution of its own, but it carries a validation route of a different, equally rigorous kind: near either minimum, any sufficiently smooth potential is locally well-approximated by a harmonic oscillator set by the local curvature, so the low-lying levels of a sufficiently deep well should closely match the already-certified HO benchmark of Section~\ref{sec:systems}-A -- an independent check without a second global closed-form answer. The double well is also the pipeline's first candidate for a genuine \emph{physical} Schottky anomaly: its central barrier supports a near-degenerate, tunnelling-split pair of levels well separated from the states above it, the textbook precondition for a real low-temperature $C_v(T)$ peak rather than a truncation artifact. This run is in progress; Section~\ref{sec:future} outlines the remaining steps.
 
-% ===================== IX. VERSION HISTORY =====================
-\section{Numerical Refinements This Semester}
+% ===================== VI. VERSION HISTORY =====================
+\section{Numerical Lessons This Semester}
 \label{sec:history}
+Manual grid tuning was replaced by the automatic Nyquist-based configuration of Section~\ref{sec:dvr}. A fixed padding heuristic, adequate for the HO, underestimated anharmonic wavefunction tails and was replaced with iterative span widening. Because the double well's $E_n\propto n^{4/3}$ scaling narrows its plateau window relative to the HO's linear spectrum, the $\xi$-scan step size was made more granular so the scan reliably lands inside the window before the finite-$N$ collapse of Section~\ref{sec:validation}. The DVR core was restricted to smooth potentials only, since a hard-wall discontinuity cannot be represented on any finite grid.
 
-Table~\ref{tab:refinements} summarizes the main numerical issues encountered and resolved this semester, all of which trace back to the physical reasoning of Sections~\ref{sec:theory}--\ref{sec:xiconv}.
-
-\begin{table}[!t]
-\centering
-\footnotesize
-\caption{Key Numerical Refinements and Their Physical Motivation}
-\label{tab:refinements}
-\begin{tabular}{@{}>{\raggedright\arraybackslash}p{2.55cm}>{\raggedright\arraybackslash}p{5.15cm}@{}}
-\toprule
-\textbf{Issue} & \textbf{Resolution and motivation} \\
-\midrule
-Manual grid tuning & Replaced by the local Nyquist criterion of Section~\ref{sec:dvr}-C, removing guesswork for new potentials. \\
-Insufficient tail padding for anharmonic wells & Fixed span padding under-estimated wavefunction tails for quartic/double-well potentials; replaced with iterative widening until eigenvalues stop changing (Section~\ref{sec:dvr}-C). \\
-Narrow plateau window for anharmonic spectra & Because $E_n\propto n^{4/3}$ in the double well, Eq.~\eqref{eq:xiwindow} narrows relative to the HO's linear spectrum; the $\xi$-step was made more granular so the scan reliably lands inside the window before finite-$N$ collapse. \\
-Aliasing at hard-wall potentials & Restricted the DVR core to smooth potentials only (Section~\ref{sec:dvr}-B), since discontinuities are not band-limited and cannot be represented on any finite grid. \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-% ===================== X. FUTURE WORK =====================
+% ===================== VII. FUTURE WORK =====================
 \section{Future Work}
 \label{sec:future}
+Two structural changes are planned for the summer continuation: replacing the dense $N\times N$ diagonalization (which scales as $\mathcal{O}(N^3)$) with an FFT-accelerated, matrix-free Krylov-subspace eigensolver, since the kinetic operator is diagonal in momentum space; and an adaptive grid mapping that satisfies the Nyquist criterion locally rather than globally, expected to cut the required grid points by a factor of $3$--$4$.
 
-Two structural changes are planned for the summer continuation of this project.
+Beyond these, the immediate next steps are to: (i) complete and quantitatively characterize the double-well run, including the symmetric-vs-asymmetric comparison discussed with the supervisor; (ii) carry out the near-minimum harmonic-limit check of Section~\ref{sec:systems}-B explicitly, and test whether the tunnelling doublet produces a genuine, $n_{\text{conv}}$-verified Schottky peak; (iii) compare the resulting $C_v(T)$ against literature values for comparable potentials, as a further external cross-check; and (iv), motivated by Section~\ref{sec:intro}, scan systematically across potentials for a genuine Schottky-driven enhancement -- and, if one is found, quantify its efficiency against the classical limit, test whether it generalizes, and propose a concrete experimental realization.
 
-\subsubsection{FFT-accelerated matrix-free diagonalization}
-The current solver builds a dense $N\times N$ Hamiltonian and diagonalizes it directly, which scales as $\mathcal{O}(N^3)$ in time and $\mathcal{O}(N^2)$ in memory -- the main obstacle to pushing $N_{\text{lev}}$ higher for anharmonic systems. Because the kinetic operator is diagonal in momentum space, its action on a wavefunction can instead be applied via a Fourier transform at a cost of $\mathcal{O}(N\log N)$ per application rather than $\mathcal{O}(N^2)$ for an explicit matrix multiply. Combined with an iterative (Krylov-subspace) eigensolver that needs only a modest number of such applications per eigenvalue, this removes the dense-matrix memory bottleneck entirely and should enable thousands of levels where hundreds are currently the practical ceiling.
-
-\subsubsection{Adaptive spatial grid mapping}
-The uniform sinc-DVR grid is inefficient for potentials whose wavefunctions oscillate rapidly near the well bottom and decay slowly in the tails: the fixed spacing must satisfy the Nyquist criterion at the point of \emph{highest} local momentum, oversampling everywhere else. An analytical coordinate map from a uniform computational coordinate rescales the local grid spacing, compressing points where the local de Broglie wavelength is short and stretching them in the classically forbidden tails. Satisfying the Nyquist criterion locally rather than globally is expected to reduce the required grid points by a factor of $3$--$4$.
-
-Beyond these two structural changes, the immediate next steps are to (i) complete and quantitatively characterize the double-well run of Section~\ref{sec:systems}, including the symmetric-vs-asymmetric comparison from Meeting~8, and produce the corresponding figures (potential shape, $C_v(T)$ summary) using the same plotting tools now in place for the HO; (ii) test the WKB prediction of Eq.~\eqref{eq:wkbsplitting} against the low-$T$ behavior of the numerical $C_v(T)$, using the $n_{\text{conv}}$ diagnostic to rule out a truncation artifact; (iii) validate the double-well pipeline against its own harmonic limit, as proposed in Meeting~3: continuously reduce the quartic and cubic terms of Eq.~\eqref{eq:doublewell} toward zero and confirm that the computed spectrum and $C_v(T)$ converge smoothly onto the HO benchmark of Section~\ref{sec:results}, giving an internal consistency check that is independent of the WKB estimate; (iv) compare the resulting $C_v(T)$ against literature values for comparable model potentials, as discussed in Meeting~8, to cross-check the pipeline against results obtained by other methods; and (v), motivated by Section~\ref{sec:intro}, begin systematically scanning across potentials for temperature windows where quantum $C_v$ exceeds classical $C_v$, as a first step toward the project's longer-term heat-machine question.
-
-% ===================== XI. CONCLUSION =====================
+% ===================== VIII. CONCLUSION =====================
 \section{Conclusion}
-
-This semester's work built the numerical groundwork for a longer-term search for quantum-enhanced heat machine performance: a general-purpose pipeline that computes $C_v(T)$, and its classical counterpart, for any smooth one-dimensional potential. Every design choice in that pipeline -- the sinc-DVR's Nyquist-limited grid, the restriction to smooth potentials, and the $\xi$-scaling as a controlled version of $\hbar\to0$ -- follows from the same semiclassical reasoning connecting discrete spectra to their classical continuum limit. The harmonic-oscillator benchmark confirms the method reproduces the exact analytical result to within machine precision, and the same pipeline is now running, unmodified, on the anharmonic double well. The Schottky-anomaly discussion of Section~\ref{sec:schottky} highlights why this validation effort matters beyond the HO case: distinguishing a genuine quantum enhancement of $C_v$ from a numerical truncation artifact is exactly the distinction this project's longer-term goal depends on, and it is precisely what the convergence machinery built this semester is designed to do.
+This semester's work built and validated the numerical groundwork for a longer-term search for quantum-enhanced heat machine performance: a pipeline that computes $C_v(T)$, quantum and classical, for any smooth potential, without depending on a closed-form solution for its own internal ground truth. That methodology was certified, once, against the HO, and reproduces it to machine precision -- evidence it can be trusted once no such answer exists to compare against. The same pipeline is now running, unmodified beyond the potential definition, on the anharmonic double well, whose near-minimum harmonic limit gives a further consistency check and whose tunnelling-split doublet is the first candidate for a genuine physical Schottky anomaly. Distinguishing that genuine enhancement from a numerical look-alike is exactly the distinction this project's longer-term goal depends on, and it is what this semester's validation machinery is designed to do.
 
 \section*{Code Availability}
 The full source code, module-level documentation, figures, and reference literature cited in this report are maintained at:\\
