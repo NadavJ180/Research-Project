@@ -1,6 +1,6 @@
 # Python cache
 __pycache__/
-*.pyc
+*.py[cod]
 
 # Virtual environments (just in case it gets moved inside the repo)
 myenv/
@@ -9,10 +9,62 @@ venv/
 # Result outputs
 Results_*/
 
-# Ignore Python bytecode and cache directories
-__pycache__/
-*.py[cod]
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
 
-# Ignores plots
-*.png
-*.jpeg
+# ===================== LaTeX / Overleaf =====================
+# Build artifacts produced when compiling docs/summaries/*.tex locally or
+# via the Overleaf git bridge -- none of these should ever be committed.
+*.aux
+*.lof
+*.log
+*.lot
+*.fls
+*.out
+*.toc
+*.fmt
+*.fot
+*.cb
+*.cb2
+*.lb
+
+# Bibliography
+*.bbl
+*.bcf
+*.blg
+*-blx.aux
+*-blx.bib
+*.run.xml
+
+# Build tool auxiliary files
+*.fdb_latexmk
+*.synctex
+*.synctex(busy)
+*.synctex.gz
+*.synctex.gz(busy)
+*.pdfsync
+
+# xindy / glossary
+*.idx
+*.ilg
+*.ind
+*.glg
+*.glo
+*.gls
+*.glsdefs
+*.lzo
+*.lzs
+*.slg
+*.slo
+*.sls
+*.xdy
+
+# Generated if empty string is given at the beginning of thebibliography
+*.upa
+*.upb
+
+# Compiled PDFs of the report (regenerate from .tex; keep the repo diff-able)
+docs/summaries/*.pdf
