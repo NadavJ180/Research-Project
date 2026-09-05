@@ -93,10 +93,17 @@ For potentials with no analytical spectrum, $\{E_n\}$ is obtained from a Colbert
 
 The grid span and spacing are set automatically from the potential itself: the span from where the wavefunctions have decayed to negligible amplitude, widened iteratively until the eigenvalues stop changing, and the spacing from the local de Broglie wavelength at the highest energy requested. Because a finite grid carries two logically distinct error sources -- too coarse a spacing, or too narrow a span -- the pipeline checks each independently, in the spirit of a Richardson-extrapolation convergence study, before any spectrum is used downstream.
 
+\begin{figure}[!t]
+\centering
+\includegraphics[draft=false,width=0.9\columnwidth]{fig_pipeline.png}
+\caption{Numerical workflow: solve the base spectrum, generate a higher-resolution numerical reference, verify convergence against it, compute quantum $C_v(T)$ and locate the classical plateau via the $\xi/n$-scan, and benchmark base- against reference-grid $C_v(T)$. The grid is refined automatically if the convergence check fails.}
+\label{fig:pipeline}
+\end{figure}
+
 % ===================== IV. VALIDATION =====================
 \section{Validation Strategy: A Ground Truth Without Closed-Form Solutions}
 \label{sec:validation}
-The pipeline is a short chain of system-agnostic stages: grid configuration and DVR solve, a higher-resolution numerical reference solve, a convergence check between the two, the $\xi/n$-scan, and a final base-vs-reference $C_v(T)$ benchmark. Switching to a new potential only requires changing the potential function itself; every other stage regenerates automatically.
+The pipeline is a short chain of system-agnostic stages (Fig.~\ref{fig:pipeline}): grid configuration and DVR solve, a higher-resolution numerical reference solve, a convergence check between the two, the $\xi/n$-scan, and a final base-vs-reference $C_v(T)$ benchmark. Switching to a new potential only requires changing the potential function itself; every other stage regenerates automatically.
 
 \subsection{A Self-Consistent Reference, Not an Analytic One}
 The ground truth at every stage is not a formula but a second DVR solve on an independently wider and finer grid. If the two agree to a set tolerance, the base result is declared converged -- the logic of Richardson extrapolation, used here as a pass/fail check rather than to improve the answer. This works identically for the HO, the double well, and every future potential, since it never touches a closed-form solution. It is not, however, proof of correctness by itself: a systematic error shared by both grids -- a bug in the DVR solver -- could make the two agree while both are wrong. Internal agreement rules out a coarse or truncated grid; it cannot rule out a flaw common to every grid the same code produces.
@@ -112,13 +119,20 @@ A second check concerns the $\xi$-scan itself, and is where the two senses of ``
 \label{sec:systems}
 
 \subsection{Harmonic Oscillator -- Validation Case}
-The HO is the system used to certify the methodology of Section~\ref{sec:validation}, since it is the only one where an independent, closed-form answer exists to check against. Base-grid energy levels agree with the numerical reference to within machine precision across the full spectrum (Fig.~\ref{fig:ho_energy_comparison}), and the resulting quantum and classical-limit $C_v(T)$ curves, together with the converged $\xi$ and $n$ values certifying each point, show the same agreement (Fig.~\ref{fig:cv_summary_ho}). Figure~\ref{fig:xi_convergence} shows a representative $\xi$-scan: a genuine plateau followed by the finite-$N$ collapse of Section~\ref{sec:validation}, the two outcomes the scan must distinguish.
+The HO is the system used to certify the methodology of Section~\ref{sec:validation}, since it is the only one where an independent, closed-form answer exists to check against. Base-grid energy levels agree with the numerical reference to within machine precision across the full spectrum (Fig.~\ref{fig:ho_energy_comparison}), settling to a flat, floating-point-limited error plateau (Fig.~\ref{fig:ho_error_vs_n}). The resulting quantum and classical-limit $C_v(T)$ curves, together with the converged $\xi$ and $n$ values certifying each point, show the same agreement (Fig.~\ref{fig:cv_summary_ho}). Figures~\ref{fig:xi_convergence}--\ref{fig:n_convergence} show a representative pair of scans at the hardest temperatures in the sweep: a genuine $\xi$-plateau followed by the finite-$N$ collapse of Section~\ref{sec:validation} (Fig.~\ref{fig:xi_convergence}), and the companion $n$-convergence check confirming that plateau is reached using only a fraction of the computed spectrum (Fig.~\ref{fig:n_convergence}) -- the two outcomes and the two checks that Section~\ref{sec:validation}-C relies on.
 
 \begin{figure}[!t]
 \centering
 \includegraphics[draft=false,width=0.9\columnwidth]{fig_ho_energy_comparison.png}
 \caption{Base-grid vs. numerical-reference energy levels $E_n$ for the HO, full spectrum (left) and zoomed to the states with the largest absolute error (right).}
 \label{fig:ho_energy_comparison}
+\end{figure}
+
+\begin{figure}[!t]
+\centering
+\includegraphics[draft=false,width=0.9\columnwidth]{fig_ho_error_vs_n.png}
+\caption{Relative error between base-grid and reference-grid energy levels vs. state index $n$, settling to a flat machine-precision plateau -- consistent with both grids being converged and only floating-point round-off remaining.}
+\label{fig:ho_error_vs_n}
 \end{figure}
 
 \begin{figure}[!t]
@@ -131,11 +145,32 @@ The HO is the system used to certify the methodology of Section~\ref{sec:validat
 \begin{figure}[!t]
 \centering
 \includegraphics[draft=false,width=0.9\columnwidth]{fig_xi_convergence.png}
-\caption{$\xi$-convergence at the hardest temperature in the sweep: $C_v(\xi)$ rises (grey), stabilizes onto a genuine plateau (green), then collapses (yellow) once $\xi$ leaves the window of Eq.~\eqref{eq:xiwindow} -- the failure mode of Section~\ref{sec:validation}.}
+\caption{$\xi$-convergence at the hardest (lowest) temperature in the sweep: $C_v(\xi)$ rises (grey), stabilizes onto a genuine plateau (green), then collapses (yellow) once $\xi$ leaves the window of Eq.~\eqref{eq:xiwindow} -- the failure mode of Section~\ref{sec:validation}.}
 \label{fig:xi_convergence}
 \end{figure}
 
-Separately, the DVR solver's own resolution and level-count limits were characterized directly, confirming the standard rule of thumb that only roughly the lower half of a computed spectrum should be trusted. Figures~\ref{fig:cv_benchmark_quantum}--\ref{fig:cv_benchmark_classical} close the loop with the external certification of Section~\ref{sec:validation}-B: the fully numerical, closed-form-free pipeline agrees with the exact Einstein-oscillator answer to machine precision, for both the quantum curve and its classical limit.
+\begin{figure}[!t]
+\centering
+\includegraphics[draft=false,width=0.9\columnwidth]{fig_n_convergence.png}
+\caption{$n$-convergence at the hardest temperature in the sweep: $C_v(n)$ rises smoothly and converges using well under the full computed spectrum, confirming the plateau is not an artifact of the truncation.}
+\label{fig:n_convergence}
+\end{figure}
+
+Separately, the DVR solver's own resolution and level-count limits were characterized directly (Figs.~\ref{fig:dvr_res_dx}--\ref{fig:dvr_res_n}), confirming the standard rule of thumb that only roughly the lower half of a computed spectrum should be trusted. Figures~\ref{fig:cv_benchmark_quantum}--\ref{fig:cv_benchmark_classical} close the loop with the external certification of Section~\ref{sec:validation}-B: the fully numerical, closed-form-free pipeline agrees with the exact Einstein-oscillator answer to machine precision, for both the quantum curve and its classical limit.
+
+\begin{figure}[!t]
+\centering
+\includegraphics[draft=false,width=0.9\columnwidth]{fig_dvr_res_dx.png}
+\caption{DVR resolution limit: relative eigenvalue error vs. grid spacing $\Delta x$. Below a critical spacing the error stays at the machine-precision floor; beyond it, the error rises by many orders of magnitude.}
+\label{fig:dvr_res_dx}
+\end{figure}
+
+\begin{figure}[!t]
+\centering
+\includegraphics[draft=false,width=0.9\columnwidth]{fig_dvr_res_n.png}
+\caption{DVR level-count limit: relative eigenvalue error vs. requested level index $n$, at fixed grid spacing. Only roughly the lower half of the computed spectrum remains trustworthy -- the highest-index states are the first whose local momentum exceeds what the grid can resolve.}
+\label{fig:dvr_res_n}
+\end{figure}
 
 \begin{figure}[!t]
 \centering
