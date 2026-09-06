@@ -60,6 +60,8 @@ Two ingredients make the pipeline usable on an arbitrary potential. First, the c
 % ===================== II. THEORY =====================
 \section{Theoretical Background}
 \label{sec:theory}
+Throughout, the working substance is assumed to be in thermal equilibrium with a bath at temperature $T$: every $C_v(T)$ in this report is the equilibrium, canonical-ensemble heat capacity of a fixed spectrum $\{E_n\}$, not a finite-time or non-equilibrium quantity. This is the standard starting point for analyzing a quasi-static engine cycle built from a sequence of such equilibrium states; the finite-time corrections to that idealization are exactly the more advanced physics cited in Section~\ref{sec:intro}, and are beyond this project's scope.
+
 For a system with discrete energy levels $\{E_n\}$ at inverse temperature $\beta=1/(k_BT)$, the heat capacity follows from the variance of the energy,
 \begin{equation}
 C_v(T) = k_B \beta^2 \left[\expval{E^2} - \expval{E}^2\right] = k_B\beta^2\,\mathrm{Var}(E).
@@ -177,6 +179,8 @@ The HO is the system used to certify the methodology of Section~\ref{sec:validat
 \label{fig:cv_summary_ho}
 \end{figure}
 
+The dashed plateau in Fig.~\ref{fig:cv_summary_ho} is not merely a numerical asymptote: it is the equipartition-theorem prediction for the HO's two quadratic degrees of freedom (kinetic and potential), $C_v=k_B$, derived independently of the $\xi$-scan in Appendix~\ref{sec:derivations}-C. That the numerically located plateau lands on this value, at every temperature in the sweep rather than only asymptotically at high $T$, is expected: for the HO the classical $C_v$ is exactly temperature-independent (Appendix~\ref{sec:derivations}-C), so the ``high-temperature'' equipartition value and ``the classical limit at this temperature'' coincide everywhere -- a correspondence that need not hold as cleanly for an anharmonic potential such as the double well (Section~\ref{sec:systems}-B).
+
 \begin{figure}[!t]
 \centering
 \includegraphics[draft=false,width=0.9\columnwidth]{fig_xi_convergence.png}
@@ -239,6 +243,49 @@ Beyond these, the immediate next steps are to: (i) complete and quantitatively c
 % ===================== IX. CONCLUSION =====================
 \section{Conclusion}
 This semester's work built and validated the numerical groundwork for a longer-term search for quantum-enhanced heat machine performance: a pipeline that computes $C_v(T)$, quantum and classical, for any smooth potential, without depending on a closed-form solution for its own internal ground truth. That methodology was certified, once, against the HO, and reproduces it to machine precision -- evidence it can be trusted once no such answer exists to compare against. The same pipeline is now running, unmodified beyond the potential definition, on the anharmonic double well, whose near-minimum harmonic limit gives a further consistency check and whose tunnelling-split doublet is the first candidate for a genuine physical Schottky anomaly. Distinguishing that genuine enhancement from a numerical look-alike is exactly the distinction this project's longer-term goal depends on, and it is what this semester's validation machinery is designed to do.
+
+\appendix
+\section{Derivations}
+\label{sec:derivations}
+
+\subsection{Heat Capacity from the Partition Function (Eq.~\ref{eq:cv_general})}
+For a canonical ensemble at inverse temperature $\beta$ with partition function $Z=\sum_n e^{-\beta E_n}$, the mean energy is $\expval{E}=-\partial_\beta \ln Z$. Differentiating $\ln Z$ directly,
+\begin{equation}
+\expval{E} = -\frac{1}{Z}\frac{\partial Z}{\partial\beta} = \frac{1}{Z}\sum_n E_n e^{-\beta E_n},
+\end{equation}
+which is the first moment of the energy under the Boltzmann weights. The heat capacity is $C_v=\partial_T\expval{E}=\left(\partial_\beta\expval{E}\right)\left(\partial_T\beta\right)$, and since $\beta=1/(k_BT)$ gives $\partial_T\beta=-k_B\beta^2$, only $\partial_\beta\expval{E}$ remains to be evaluated:
+\begin{equation}
+\frac{\partial\expval{E}}{\partial\beta} = -\frac{1}{Z^2}\frac{\partial Z}{\partial\beta}\sum_n E_ne^{-\beta E_n} - \frac{1}{Z}\sum_n E_n^2 e^{-\beta E_n} = \expval{E}^2-\expval{E^2}.
+\end{equation}
+Combining the two results, $C_v = -k_B\beta^2\left(\expval{E}^2-\expval{E^2}\right) = k_B\beta^2\,\mathrm{Var}(E)$, exactly Eq.~\eqref{eq:cv_general}. Nothing in this derivation refers to how $\{E_n\}$ was obtained, which is why the same formula applies unchanged to a closed-form spectrum or a numerically diagonalized one.
+
+\subsection{The Valid Range for $\xi$ (Eq.~\ref{eq:xiwindow})}
+The pipeline evaluates the scaled partition function $Z(\beta,\xi)=\sum_n e^{-\beta E_n/\xi^2}$. Two constraints on $\xi$ must hold simultaneously for the resulting $C_v(\xi)$ to represent the classical limit rather than an artifact.
+
+\emph{Lower bound.} For the discrete sum to approximate the continuous classical integral it is meant to mimic, the exponent must change by much less than unity between adjacent levels, so that no single term dominates the local behaviour of the sum: with $\Delta E=E_{n+1}-E_n$ the local spacing, $\beta\Delta E/\xi^2\ll1$, i.e.
+\begin{equation}
+\xi \gg \sqrt{\beta\,\Delta E}.
+\end{equation}
+Below this, the spectrum still looks discrete to the scaled sum, and $C_v(\xi)$ is just the quantum $C_v$ again.
+
+\emph{Upper bound.} Because the sum is truncated at a finite highest level $E_{\max}$, the truncation is only harmless if that level's Boltzmann weight stays negligible -- not that it "dominates" the sum, but that it must remain small enough not to distort the result relative to the true, untruncated sum: $e^{-\beta E_{\max}/\xi^2}\approx0$ requires the exponent to be large, $\beta E_{\max}/\xi^2\gg1$, i.e.
+\begin{equation}
+\xi \ll \sqrt{\beta\,E_{\max}}.
+\end{equation}
+Above this, the top of the truncated spectrum gains non-negligible weight and $C_v(\xi)$ collapses toward zero -- the finite-$N$ artifact of Section~\ref{sec:validation}. Combining the two gives the window of Eq.~\eqref{eq:xiwindow}, which only admits a valid $\xi$ at all when $\Delta E\ll E_{\max}$, i.e. when many levels are available.
+
+\subsection{The Harmonic-Oscillator Heat Capacity (Eq.~\ref{eq:cvho}) and Its Classical Limit}
+With $E_n=\hbar\omega(n+\tfrac12)$, the partition function is a geometric series,
+\begin{equation}
+Z^{\text{HO}} = e^{-\beta\hbar\omega/2}\sum_{n=0}^{\infty}\left(e^{-\beta\hbar\omega}\right)^n = \frac{e^{-\beta\hbar\omega/2}}{1-e^{-\beta\hbar\omega}},
+\end{equation}
+convergent since $e^{-\beta\hbar\omega}<1$ for $\beta,\hbar,\omega>0$. Differentiating $\expval{E}=-\partial_\beta\ln Z^{\text{HO}}$ gives $\expval{E}=\tfrac{\hbar\omega}{2}+\tfrac{\hbar\omega}{e^{\beta\hbar\omega}-1}$, and one further $\beta$-derivative (Appendix~\ref{sec:derivations}-A) gives, after using $\cosh$/$\sinh$ identities to simplify,
+\begin{equation}
+C_v^{\text{HO}} = k_B(\beta\hbar\omega)^2\frac{e^{\beta\hbar\omega}}{\left(e^{\beta\hbar\omega}-1\right)^2} = \frac14 k_B\left[\beta\hbar\omega\,\operatorname{csch}\!\left(\frac{\beta\hbar\omega}{2}\right)\right]^2,
+\end{equation}
+the two forms being algebraically identical since $\left(e^{x}-1\right)^2=e^{x}\left(e^{x/2}-e^{-x/2}\right)^2$.
+
+Two independent routes confirm the classical limit is $k_B$. Taking $\beta\hbar\omega\to0$ in the exact formula above (L'H\^opital's rule on the indeterminate $0/0$ form) gives $C_v^{\text{HO}}\to k_B$. Separately, and without reference to the quantum formula at all, the equipartition theorem assigns $\tfrac12 k_BT$ to each quadratic term in the Hamiltonian $H=\tfrac{p^2}{2m}+\tfrac12 m\omega^2x^2$; with two such terms (kinetic and potential), $\expval{E}=k_BT$ and $C_v=\partial_T\expval{E}=k_B$, independent of $T$. That both routes -- one a limit of the discrete quantum spectrum, the other a classical phase-space argument that never mentions $\hbar$ -- agree exactly is the correspondence principle at work, and is what Fig.~\ref{fig:cv_summary_ho} confirms numerically.
 
 \section*{Code Availability}
 The full source code, module-level documentation, figures, and reference literature cited in this report are maintained at:\\
