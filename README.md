@@ -1,4 +1,4 @@
-# Quantum Heat Machines Research Project
+# Quantum-Classical Heat Capacity
 
 This repository contains the simulation code and mathematical derivations for studying the convergence of quantum systems to their classical limits, specifically focusing on the heat capacity ($C_v$) of various potential energy systems.
 
